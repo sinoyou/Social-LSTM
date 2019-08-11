@@ -51,6 +51,7 @@ def main():
     # Dimension of the embeddings parameter
     parser.add_argument('--embedding_size', type=int, default=128,
                         help='Embedding dimension for the spatial coordinates')
+    # yzn 训练和监测时将5组数据按照4:1的比例拆分，下述参数即用于指定不参加训练的数据组。
     parser.add_argument('--leaveDataset', type=int, default=1,
                         help='The dataset index to be left out in training')
     args = parser.parse_args()
@@ -58,7 +59,7 @@ def main():
 
 
 def train(args):
-    datasets = range(2)
+    datasets = list(range(2))
     # Remove the leaveDataset from datasets
     datasets.remove(args.leaveDataset)
 
@@ -83,6 +84,7 @@ def train(args):
         # For each epoch
         for e in range(args.num_epochs):
             # Assign the learning rate (decayed acc. to the epoch number)
+            # yzn 每一个epoch后降低学习率的大小
             sess.run(tf.assign(model.lr, args.learning_rate * (args.decay_rate ** e)))
             # Reset the pointers in the data loader object
             data_loader.reset_batch_pointer()
@@ -106,7 +108,7 @@ def train(args):
                 # Print epoch, batch, loss and time taken
                 print(
                     "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
-                    .format(
+                        .format(
                         e * data_loader.num_batches + b,
                         args.num_epochs * data_loader.num_batches,
                         e,
@@ -117,6 +119,7 @@ def train(args):
                     checkpoint_path = os.path.join('save', 'model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
                     print("model saved to {}".format(checkpoint_path))
+
 
 if __name__ == '__main__':
     main()

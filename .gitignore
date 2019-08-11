@@ -10,3 +10,4 @@ save
 *.cpkl
 *.backup
 test.py
+.idea/

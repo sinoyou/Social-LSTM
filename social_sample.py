@@ -9,6 +9,8 @@ import ipdb
 from social_utils import SocialDataLoader
 from social_model import SocialModel
 from grid import getSequenceGridMask
+
+
 # from social_train import getSocialGrid, getSocialTensor
 
 
@@ -76,7 +78,7 @@ def main():
 
     # Get the checkpoint state for the model
     ckpt = tf.train.get_checkpoint_state('save')
-    print ('loading model: ', ckpt.model_checkpoint_path)
+    print('loading model: ', ckpt.model_checkpoint_path)
 
     # Restore the model at the checkpoint
     saver.restore(sess, ckpt.model_checkpoint_path)
@@ -85,7 +87,8 @@ def main():
     dataset = [sample_args.test_dataset]
 
     # Create a SocialDataLoader object with batch_size 1 and seq_length equal to observed_length + pred_length
-    data_loader = SocialDataLoader(1, sample_args.pred_length + sample_args.obs_length, saved_args.maxNumPeds, dataset, True)
+    data_loader = SocialDataLoader(1, sample_args.pred_length + sample_args.obs_length, saved_args.maxNumPeds, dataset,
+                                   True)
 
     # Reset all pointers of the data_loader
     data_loader.reset_batch_pointer()
@@ -117,10 +120,11 @@ def main():
         # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
         total_error += get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
 
-        print "Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories"
+        print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
 
     # Print the mean error across all the batches
-    print "Total mean error of the model is ", total_error/data_loader.num_batches
+    print("Total mean error of the model is " , total_error / data_loader.num_batches)
+
 
 if __name__ == '__main__':
     main()

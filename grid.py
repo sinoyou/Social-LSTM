@@ -76,6 +76,11 @@ def getSequenceGridMask(sequence, dimensions, neighborhood_size, grid_size):
     neighborhood_size : Scalar value representing the size of neighborhood considered
     grid_size : Scalar value representing the size of the grid discretization
     '''
+    # yzn ：形成Mask有两步要走：
+    # 第一步 - 查看边界条件，确定某个行人是否需要出现在行人A的Mask中。(主要涉及dimensions和neighborhood size)
+    # 第二步 - 若在行人A的Mask中，该在Mask的哪一个部位？(主要涉及grid_size)
+    # * dimensions列表中的两个值和neighborhood size隶属同一个比例尺，neighborhood size就是环境的极限大小。（可理解为图片边界）
+    #   neighborhood size用于在dimensions全局环境下划分的grid边界，相除区间处于0-1，恰好符合输入数据的规格要求。
     sl = sequence.shape[0]
     mnp = sequence.shape[1]
     sequence_mask = np.zeros((sl, mnp, mnp, grid_size**2))

@@ -69,7 +69,7 @@ def main():
 
 
 def train(args):
-    datasets = range(2)
+    datasets = list(range(2))
     # Remove the leaveDataset from datasets
     datasets.remove(args.leaveDataset)
 
@@ -140,7 +140,7 @@ def train(args):
                 loss_batch = loss_batch / data_loader.batch_size
                 print(
                     "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
-                    .format(
+                        .format(
                         e * data_loader.num_batches + b,
                         args.num_epochs * data_loader.num_batches,
                         e,
@@ -151,6 +151,7 @@ def train(args):
                     checkpoint_path = os.path.join('save', 'social_model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
                     print("model saved to {}".format(checkpoint_path))
+
 
 if __name__ == '__main__':
     main()

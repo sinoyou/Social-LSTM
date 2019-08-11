@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import ipdb
 
+
 # The data loader class that loads data from the datasets considering
 # each frame as a datapoint and a sequence of consecutive frames as the
 # sequence.
@@ -41,7 +42,7 @@ class SocialDataLoader():
         data_file = os.path.join(self.data_dir, "social-trajectories.cpkl")
 
         # If the file doesn't exist or forcePreProcess is true
-        if not(os.path.exists(data_file)) or forcePreProcess:
+        if not (os.path.exists(data_file)) or forcePreProcess:
             print("Creating pre-processed data from raw data")
             # Preprocess the data from the csv files of the datasets
             # Note that this data is processed in frames
@@ -158,12 +159,12 @@ class SocialDataLoader():
         for dataset in range(len(self.data)):
             # get the frame data for the current dataset
             all_frame_data = self.data[dataset]
-            print len(all_frame_data)
+            print(len(all_frame_data))
             # Increment the counter with the number of sequences in the current dataset
-            counter += int(len(all_frame_data) / (self.seq_length+2))
+            counter += int(len(all_frame_data) / (self.seq_length + 2))
 
         # Calculate the number of batches
-        self.num_batches = int(counter/self.batch_size)
+        self.num_batches = int(counter / self.batch_size)
 
     def next_batch(self):
         '''
@@ -185,9 +186,9 @@ class SocialDataLoader():
             # While there is still seq_length number of frames left in the current dataset
             if idx + self.seq_length < frame_data.shape[0]:
                 # All the data in this sequence
-                seq_frame_data = frame_data[idx:idx+self.seq_length+1, :]
-                seq_source_frame_data = frame_data[idx:idx+self.seq_length, :]
-                seq_target_frame_data = frame_data[idx+1:idx+self.seq_length+1, :]
+                seq_frame_data = frame_data[idx:idx + self.seq_length + 1, :]
+                seq_source_frame_data = frame_data[idx:idx + self.seq_length, :]
+                seq_target_frame_data = frame_data[idx + 1:idx + self.seq_length + 1, :]
                 # Number of unique peds in this sequence of frames
                 pedID_list = np.unique(seq_frame_data[:, :, 0])
                 numUniquePeds = pedID_list.shape[0]

@@ -23,6 +23,7 @@ class DataLoader():
         self.used_data_dirs = [self.data_dirs[x] for x in datasets]
 
         # Data directory where the pre-processed pickle file resides
+        # yzn pickle：腌制
         self.data_dir = './data'
 
         # Store the batch size and the sequence length arguments
@@ -33,7 +34,7 @@ class DataLoader():
         data_file = os.path.join(self.data_dir, "trajectories.cpkl")
 
         # If the file doesn't exist already or if forcePreProcess is true
-        if not(os.path.exists(data_file)) or forcePreProcess:
+        if not (os.path.exists(data_file)) or forcePreProcess:
             print("Creating pre-processed data from raw data")
             # Preprocess the data from the csv files
             self.preprocess(self.used_data_dirs, data_file)
@@ -56,7 +57,9 @@ class DataLoader():
         # in the order x, y, frameId
         # Pedestrians from all datasets are combined
         # Dataset pedestrian indices are stored in dataset_indices
+        # yzn all_ped_data : {行人编号 : [x, y, 时间页框号]}
         all_ped_data = {}
+        # yzn dataset_indices : 记录不同的数据目录（dir）加载出来的行人数量，以区分all_ped_data中的信息。
         dataset_indices = []
         current_ped = 0
         # For each dataset
@@ -73,7 +76,7 @@ class DataLoader():
             numPeds = np.size(np.unique(data[1, :]))
 
             # For each pedestrian in the dataset
-            for ped in range(1, numPeds+1):
+            for ped in range(1, numPeds + 1):
                 # Extract trajectory of the current ped
                 traj = data[:, data[1, :] == ped]
                 # Format it as (x, y, frameId)
@@ -83,7 +86,7 @@ class DataLoader():
                 all_ped_data[current_ped + ped] = traj
 
             # Current dataset done
-            dataset_indices.append(current_ped+numPeds)
+            dataset_indices.append(current_ped + numPeds)
             current_ped += numPeds
 
         # The complete data is a tuple of all pedestrian data, and dataset ped indices
@@ -114,15 +117,17 @@ class DataLoader():
         counter = 0
 
         # For each pedestrian in the data
+        # yzn 此处从预处理csv后生成的数据中取出了 轨迹长度大于rnn模型长度+2的行人 作为能够使用的数据 -> 放入data中
         for ped in all_ped_data:
             # Extract his trajectory
             traj = all_ped_data[ped]
             # If the length of the trajectory is greater than seq_length (+2 as we need both source and target data)
-            if traj.shape[1] > (self.seq_length+2):
+            if traj.shape[1] > (self.seq_length + 2):
                 # TODO: (Improve) Store only the (x,y) coordinates for now
+                # yzn : [空间信息，时间信息] -> [时间信息，空间信息]
                 self.data.append(traj[[0, 1], :].T)
                 # Number of batches this datapoint is worth
-                counter += int(traj.shape[1] / ((self.seq_length+2)))
+                counter += int(traj.shape[1] / ((self.seq_length + 2)))
 
         # Calculate the number of batches (each of batch_size) in the data
         self.num_batches = int(counter / self.batch_size)
@@ -131,6 +136,8 @@ class DataLoader():
         '''
         Function to get the next batch of points
         '''
+        # yzn : 在data中的行人轨迹信息都是长度大于seq_length+2的，在生成x_batch和y_batch时用随机因子的方式选取轨迹信息中
+        # 长度为seq_length的段作为最终的数据。
         # List of source and target data for the current batch
         x_batch = []
         y_batch = []
@@ -139,14 +146,15 @@ class DataLoader():
             # Extract the trajectory of the pedestrian pointed out by self.pointer
             traj = self.data[self.pointer]
             # Number of sequences corresponding to his trajectory
-            n_batch = int(traj.shape[0] / (self.seq_length+2))
+            n_batch = int(traj.shape[0] / (self.seq_length + 2))
             # Randomly sample a index from which his trajectory is to be considered
             idx = random.randint(0, traj.shape[0] - self.seq_length - 2)
             # Append the trajectory from idx until seq_length into source and target data
-            x_batch.append(np.copy(traj[idx:idx+self.seq_length, :]))
-            y_batch.append(np.copy(traj[idx+1:idx+self.seq_length+1, :]))
+            x_batch.append(np.copy(traj[idx:idx + self.seq_length, :]))
+            y_batch.append(np.copy(traj[idx + 1:idx + self.seq_length + 1, :]))
 
-            if random.random() < (1.0/float(n_batch)):
+            # yzn 当一个行人的轨迹很长时，那么其被多次采样在一个batch中的概率也随之增大（注意只是概率增大了）
+            if random.random() < (1.0 / float(n_batch)):
                 # Adjust sampling probability
                 # if this is a long datapoint, sample this data more with
                 # higher probability
@@ -167,3 +175,7 @@ class DataLoader():
         Reset the data pointer
         '''
         self.pointer = 0
+
+
+if __name__ == '__main__':
+    dataLoader = DataLoader(datasets=[1], forcePreProcess=True)

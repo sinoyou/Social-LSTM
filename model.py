@@ -12,6 +12,7 @@ from tensorflow.python.ops import rnn_cell
 
 
 # The Vanilla LSTM model
+# yzn 裸LSTM模型，无交互LSTM之间的交互池化层。
 class Model():
 
     def __init__(self, args, infer=False):
@@ -35,6 +36,7 @@ class Model():
         cell = rnn_cell.BasicLSTMCell(args.rnn_size, state_is_tuple=False)
 
         # Multi-layer RNN construction, if more than one layer
+        # yzn Multi-layer 指多层rnn模型，从而形成拓扑结构
         cell = rnn_cell.MultiRNNCell([cell] * args.num_layers, state_is_tuple=False)
 
         # TODO: (improve) Dropout layer can be added here
@@ -57,6 +59,7 @@ class Model():
         output_size = 5  # 2 mu, 2 sigma and 1 corr
 
         # Embedding for the spatial coordinates
+        # yzn 嵌入降维，w和b用于降维数据，同时又凸显出原本数据之间的差异。默认将2维变化为128维
         with tf.variable_scope("coordinate_embedding"):
             #  The spatial embedding using a ReLU layer
             #  Embed the 2D coordinates into embedding_size dimensions
@@ -66,14 +69,20 @@ class Model():
 
         # Output linear layer
         with tf.variable_scope("rnnlm"):
-            output_w = tf.get_variable("output_w", [args.rnn_size, output_size], initializer=tf.truncated_normal_initializer(stddev=0.01), trainable=True)
-            output_b = tf.get_variable("output_b", [output_size], initializer=tf.constant_initializer(0.01), trainable=True)
+            output_w = tf.get_variable("output_w", [args.rnn_size, output_size],
+                                       initializer=tf.truncated_normal_initializer(stddev=0.01), trainable=True)
+            output_b = tf.get_variable("output_b", [output_size], initializer=tf.constant_initializer(0.01),
+                                       trainable=True)
 
         # Split inputs according to sequences.
-        inputs = tf.split(1, args.seq_length, self.input_data)
+        # yzn split函数的作用：将张量将指定的维度，拆分成数量为第二个参数的子张量，需要满足整除关系。
+        # inputs = tf.split(1, args.seq_length, self.input_data)
+        inputs = tf.split(self.input_data, args.seq_length, axis=1)
         # Get a list of 2D tensors. Each of size numPoints x 2
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        # 上述两步 yzn [数据个数][序列长度][2] -> [数据个数][1][2]*序列长度 -> [数据个数][2]*序列长度
 
+        # yzn ------ 正式输入模型：镶嵌
         # Embed the input spatial points into the embedding space
         embedded_inputs = []
         for x in inputs:
@@ -83,20 +92,29 @@ class Model():
             embedded_inputs.append(embedded_x)
 
         # Feed the embedded input data, the initial state of the LSTM cell, the recurrent unit to the seq2seq decoder
-        outputs, last_state = tf.nn.seq2seq.rnn_decoder(embedded_inputs, self.initial_state, cell, loop_function=None, scope="rnnlm")
+        # yzn todo :
+        # 1. decoder内部如何将inputs列表中数据逐个放入的？ - 参考BasicLSTMCell中的call实现代码（注意通过矩阵拼接实现运算简化）
+        # 2. batch_size在运行sample时不变，但传入的数据并不满足batch_size的要求。
+        # 3. Hint：弄清RNN的真实结构 - cell的W和b权值是共享的，在使用时是循环着用的，因此对于一层LSTM仅有一个cell实体。
+        outputs, last_state = tf.contrib.legacy_seq2seq.rnn_decoder(embedded_inputs, self.initial_state, cell,
+                                                                    loop_function=None, scope="rnnlm")
 
         # Concatenate the outputs from the RNN decoder and reshape it to ?xargs.rnn_size
-        output = tf.reshape(tf.concat(1, outputs), [-1, args.rnn_size])
+        # yzn 在维度1上，将outputs中的所有矩阵([batch_size, rnn_size])拼接起来，形成一个总的rnn -> (reshape) ->
+        # [batch_size * seq_length, rnn_size]
+        output = tf.reshape(tf.concat(outputs, 1), [-1, args.rnn_size])
 
         # Apply the output linear layer
+        # yzn 将rnn输出的结果转化成[seq_length * batch_size][5]的结构，5列数据分别代表5中空间表示数据（用于数据驱动）
         output = tf.nn.xw_plus_b(output, output_w, output_b)
         # Store the final LSTM cell state after the input data has been feeded
         self.final_state = last_state
 
-        # reshape target data so that it aligns with predictions
+        # reshape target data so that it aligns with predictions -> [batch_size * seq_length][2]
         flat_target_data = tf.reshape(self.target_data, [-1, 2])
         # Extract the x-coordinates and y-coordinates from the target data
-        [x_data, y_data] = tf.split(1, 2, flat_target_data)
+        # [x_data, y_data] = tf.split(1, 2, flat_target_data)
+        [x_data, y_data] = tf.split(flat_target_data, 2, axis=1)
 
         def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
             '''
@@ -113,17 +131,18 @@ class Model():
             # eq 3 in the paper
             # and eq 24 & 25 in Graves (2013)
             # Calculate (x - mux) and (y-muy)
-            normx = tf.sub(x, mux)
-            normy = tf.sub(y, muy)
+            normx = tf.subtract(x, mux)
+            normy = tf.subtract(y, muy)
             # Calculate sx*sy
-            sxsy = tf.mul(sx, sy)
+            sxsy = tf.multiply(sx, sy)
             # Calculate the exponential factor
-            z = tf.square(tf.div(normx, sx)) + tf.square(tf.div(normy, sy)) - 2*tf.div(tf.mul(rho, tf.mul(normx, normy)), sxsy)
+            z = tf.square(tf.div(normx, sx)) + tf.square(tf.div(normy, sy)) - 2 * tf.div(
+                tf.multiply(rho, tf.multiply(normx, normy)), sxsy)
             negRho = 1 - tf.square(rho)
             # Numerator
-            result = tf.exp(tf.div(-z, 2*negRho))
+            result = tf.exp(tf.div(-z, 2 * negRho))
             # Normalization constant
-            denom = 2 * np.pi * tf.mul(sxsy, tf.sqrt(negRho))
+            denom = 2 * np.pi * tf.multiply(sxsy, tf.sqrt(negRho))
             # Final PDF calculation
             result = tf.div(result, denom)
             self.result = result
@@ -153,8 +172,9 @@ class Model():
             result0_3 = tf_2d_normal(x_data, tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
             result0_4 = tf_2d_normal(tf.add(x_data, step), tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
 
-            result0 = tf.div(tf.add(tf.add(tf.add(result0_1, result0_2), result0_3), result0_4), tf.constant(4.0, dtype=tf.float32, shape=(1, 1)))
-            result0 = tf.mul(tf.mul(result0, step), step)
+            result0 = tf.div(tf.add(tf.add(tf.add(result0_1, result0_2), result0_3), result0_4),
+                             tf.constant(4.0, dtype=tf.float32, shape=(1, 1)))
+            result0 = tf.multiply(tf.multiply(result0, step), step)
 
             # For numerical stability purposes
             epsilon = 1e-20
@@ -178,7 +198,8 @@ class Model():
 
             z = output
             # Split the output into 5 parts corresponding to means, std devs and corr
-            z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(1, 5, z)
+            # z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(1, 5, z)
+            z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(z, 5, 1)
 
             # The output must be exponentiated for the std devs
             z_sx = tf.exp(z_sx)
@@ -200,6 +221,7 @@ class Model():
         self.sy = o_sy
         self.corr = o_corr
 
+        # yzn : 进入输出结果数据收尾阶段, loss-cost-gradient decent-optimizer
         # Compute the loss function
         lossfunc = get_lossfunc(o_mux, o_muy, o_sx, o_sy, o_corr, x_data, y_data)
 
@@ -214,6 +236,7 @@ class Model():
         # Calculate gradients of the cost w.r.t all the trainable variables
         self.gradients = tf.gradients(self.cost, tvars)
         # Clip the gradients if they are larger than the value given in args
+        # yzn 过大梯度下降剪枝
         grads, _ = tf.clip_by_global_norm(self.gradients, args.grad_clip)
 
         # NOTE: Using RMSprop as suggested by Social LSTM instead of Adam as Graves(2013) does
@@ -233,6 +256,8 @@ class Model():
         traj: List of past trajectory points
         num: Number of time-steps into the future to be predicted
         '''
+
+        # yzn 多元正态分布矩阵, 根据均值和协方差矩阵生成正态分布的多维矩阵。
         def sample_gaussian_2d(mux, muy, sx, sy, rho):
             '''
             Function to sample a point from a given 2D normal distribution
@@ -246,8 +271,8 @@ class Model():
             # Extract mean
             mean = [mux, muy]
             # Extract covariance matrix
-            cov = [[sx*sx, rho*sx*sy], [rho*sx*sy, sy*sy]]
-            # Sample a point from the multivariate normal distribution
+            cov = [[sx * sx, rho * sx * sy], [rho * sx * sy, sy * sy]]
+            # Sample a point from the multiplytivariate normal distribution
             x = np.random.multivariate_normal(mean, cov, 1)
             return x[0][0], x[0][1]
 
@@ -262,6 +287,7 @@ class Model():
             data[0, 0, 1] = pos[1]  # y
 
             # Create the feed dict
+            # yzn feed_dic 允许调用者覆盖图中的张量的值，可以是placeHolder、Tensor等等
             feed = {self.input_data: data, self.initial_state: state}
             # Get the final state after processing the current position
             [state] = sess.run([self.final_state], feed)
@@ -281,7 +307,8 @@ class Model():
             feed = {self.input_data: prev_data, self.initial_state: state}
 
             # Get the final state and also the coef of the distribution of the next point
-            [o_mux, o_muy, o_sx, o_sy, o_corr, state] = sess.run([self.mux, self.muy, self.sx, self.sy, self.corr, self.final_state], feed)
+            [o_mux, o_muy, o_sx, o_sy, o_corr, state] = sess.run(
+                [self.mux, self.muy, self.sx, self.sy, self.corr, self.final_state], feed)
 
             # Sample the next point from the distribution
             next_x, next_y = sample_gaussian_2d(o_mux[0][0], o_muy[0][0], o_sx[0][0], o_sy[0][0], o_corr[0][0])

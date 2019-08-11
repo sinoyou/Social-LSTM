@@ -28,7 +28,7 @@ def get_mean_error(predicted_traj, true_traj, observed_length):
         true_pos = true_traj[i, :]
 
         # The euclidean distance is the error
-        error[i-observed_length] = np.linalg.norm(true_pos - pred_pos)
+        error[i - observed_length] = np.linalg.norm(true_pos - pred_pos)
 
     # Return the mean error
     return np.mean(error)
@@ -55,6 +55,7 @@ def main():
         saved_args = pickle.load(f)
 
     # Initialize with the saved args
+    # yzn : infer = true，则batch_size和seq_length固定为1，不参考保存的参数.
     model = Model(saved_args, True)
     # Initialize TensorFlow session
     sess = tf.InteractiveSession()
@@ -92,10 +93,11 @@ def main():
 
         # Compute the mean error between the predicted part and the true trajectory
         total_error += get_mean_error(complete_traj, x[0], sample_args.obs_length)
-        print "Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories"
+        print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
 
     # Print the mean error across all the batches
-    print "Total mean error of the model is ", total_error/data_loader.num_batches
+    print("Total mean error of the model is ", total_error / data_loader.num_batches)
+
 
 if __name__ == '__main__':
     main()
