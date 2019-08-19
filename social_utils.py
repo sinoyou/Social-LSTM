@@ -1,7 +1,6 @@
 import os
 import pickle
 import numpy as np
-import ipdb
 
 
 # The data loader class that loads data from the datasets considering
@@ -21,12 +20,16 @@ class SocialDataLoader():
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
         #                  './data/ucy/zara/zara01', './data/ucy/zara/zara02',
         #                  './data/ucy/univ']
-        self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
+        # self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
+        dir = os.path.join('data', 'MOT16Filter', 'train')
+        self.data_files = [dir + '\MOT16-' + subname + '.csv' for subname in ['02', '04', '05', '09', '10', '11', '13']]
 
-        self.used_data_dirs = [self.data_dirs[x] for x in datasets]
+        # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
+        self.used_data_files = [self.data_files[x] for x in datasets]
 
         # Number of datasets
-        self.numDatasets = len(self.data_dirs)
+        # self.numDatasets = len(self.data_dirs)
+        self.numDatasets = len(self.data_files)
 
         # Data directory where the pre-processed pickle file resides
         self.data_dir = './data'
@@ -46,19 +49,20 @@ class SocialDataLoader():
             print("Creating pre-processed data from raw data")
             # Preprocess the data from the csv files of the datasets
             # Note that this data is processed in frames
-            self.frame_preprocess(self.used_data_dirs, data_file)
+            # self.frame_preprocess(self.used_data_dirs, data_file)
+            self.frame_preprocess(self.used_data_files, data_file)
 
         # Load the processed data from the pickle file
         self.load_preprocessed(data_file)
         # Reset all the data pointers of the dataloader object
         self.reset_batch_pointer()
 
-    def frame_preprocess(self, data_dirs, data_file):
+    def frame_preprocess(self, data_files, data_file):
         '''
         Function that will pre-process the pixel_pos.csv files of each dataset
         into data with occupancy grid that can be used
         params:
-        data_dirs : List of directories where raw data resides
+        data_dirs : List of csv files where raw data resides
         data_file : The file into which all the pre-processed data needs to be stored
         '''
 
@@ -76,10 +80,11 @@ class SocialDataLoader():
         dataset_index = 0
 
         # For each dataset
-        for directory in data_dirs:
+        for file in data_files:
 
             # Define path of the csv file of the current dataset
-            file_path = os.path.join(directory, 'pixel_pos.csv')
+            # file_path = os.path.join(directory, 'pixel_pos.csv')
+            file_path = file
 
             # Load the data from the csv file
             data = np.genfromtxt(file_path, delimiter=',')

@@ -5,8 +5,8 @@ import os
 import pickle
 import argparse
 
-from utils import DataLoader
-from model import Model
+from vanilla_lstm.utils import DataLoader
+from vanilla_lstm.model import Model
 
 
 def get_mean_error(predicted_traj, true_traj, observed_length):

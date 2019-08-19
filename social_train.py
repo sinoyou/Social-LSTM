@@ -3,7 +3,6 @@ import argparse
 import os
 import time
 import pickle
-import ipdb
 
 from social_model import SocialModel
 from social_utils import SocialDataLoader
@@ -27,13 +26,13 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10,
                         help='minibatch size')
     # Length of sequence to be considered parameter
-    parser.add_argument('--seq_length', type=int, default=5,
+    parser.add_argument('--seq_length', type=int, default=10,
                         help='RNN sequence length')
     # Number of epochs parameter
-    parser.add_argument('--num_epochs', type=int, default=50,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=400,
+    parser.add_argument('--save_every', type=int, default=100,
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped
@@ -53,23 +52,23 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=64,
                         help='Embedding dimension for the spatial coordinates')
     # Size of neighborhood to be considered parameter
-    parser.add_argument('--neighborhood_size', type=int, default=32,
+    parser.add_argument('--neighborhood_size', type=int, default=200,
                         help='Neighborhood size to be considered for social grid')
     # Size of the social grid parameter
     parser.add_argument('--grid_size', type=int, default=2,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
-    parser.add_argument('--maxNumPeds', type=int, default=27,
+    parser.add_argument('--maxNumPeds', type=int, default=55,
                         help='Maximum Number of Pedestrians')
     # The leave out dataset
-    parser.add_argument('--leaveDataset', type=int, default=1,
+    parser.add_argument('--leaveDataset', type=int, default=2,
                         help='The dataset index to be left out in training')
     args = parser.parse_args()
     train(args)
 
 
 def train(args):
-    datasets = list(range(2))
+    datasets = list(range(7))
     # Remove the leaveDataset from datasets
     datasets.remove(args.leaveDataset)
 
@@ -85,9 +84,11 @@ def train(args):
     # Initialize a TensorFlow session
     with tf.Session() as sess:
         # Initialize all variables in the graph
-        sess.run(tf.initialize_all_variables())
+        # sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         # Initialize a saver that saves all the variables in the graph
-        saver = tf.train.Saver(tf.all_variables())
+        # saver = tf.train.Saver(tf.all_variables())
+        saver = tf.train.Saver(tf.global_variables())
 
         # summary_writer = tf.train.SummaryWriter('/tmp/lstm/logs', graph_def=sess.graph_def)
 
@@ -119,10 +120,11 @@ def train(args):
                     # d_batch would be a scalar identifying the dataset from which this sequence is extracted
                     x_batch, y_batch, d_batch = x[batch], y[batch], d[batch]
 
-                    if d_batch == 0 and datasets[0] == 0:
+                    if d_batch == 2 and datasets[2] == 2:
+                        print('Low scale scene found.')
                         dataset_data = [640, 480]
                     else:
-                        dataset_data = [720, 576]
+                        dataset_data = [1920, 1080]
 
                     grid_batch = getSequenceGridMask(x_batch, dataset_data, args.neighborhood_size, args.grid_size)
 
@@ -149,7 +151,7 @@ def train(args):
                 # Save the model if the current epoch and batch number match the frequency
                 if (e * data_loader.num_batches + b) % args.save_every == 0 and ((e * data_loader.num_batches + b) > 0):
                     checkpoint_path = os.path.join('save', 'social_model.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b)
+                    saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b, write_meta_graph=False)
                     print("model saved to {}".format(checkpoint_path))
 
 

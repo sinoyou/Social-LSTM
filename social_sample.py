@@ -4,7 +4,6 @@ import tensorflow as tf
 import os
 import pickle
 import argparse
-import ipdb
 
 from social_utils import SocialDataLoader
 from social_model import SocialModel
@@ -50,13 +49,49 @@ def get_mean_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     return np.mean(error)
 
 
+def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
+    '''
+    Function that computes the final euclidean distance error between the
+    predicted and the true trajectory
+    params:
+    predicted_traj : numpy matrix with the points of the predicted trajectory
+    true_traj : numpy matrix with the points of the true trajectory
+    observed_length : The length of trajectory observed
+    '''
+    # The data structure to store all errors
+    error = np.zeros(1)
+    # For each point in the predicted part of the trajectory
+    for i in range(len(true_traj) - 1, len(true_traj)):
+        # The predicted position. This will be a maxNumPeds x 3 matrix
+        pred_pos = predicted_traj[i, :]
+        # The true position. This will be a maxNumPeds x 3 matrix
+        true_pos = true_traj[i, :]
+        timestep_error = 0
+        counter = 0
+        for j in range(maxNumPeds):
+            if true_pos[j, 0] == 0:
+                # Non-existent ped
+                continue
+            else:
+                timestep_error += np.linalg.norm(true_pos[j, [1, 2]] - pred_pos[j, [1, 2]])
+                counter += 1
+
+        error[0] = timestep_error / counter
+
+        # The euclidean distance is the error
+        # error[i-observed_length] = np.linalg.norm(true_pos - pred_pos)
+
+    # Return the mean error
+    return np.mean(error)
+
+
 def main():
     parser = argparse.ArgumentParser()
     # Observed length of the trajectory parameter
-    parser.add_argument('--obs_length', type=int, default=5,
+    parser.add_argument('--obs_length', type=int, default=10,
                         help='Observed length of the trajectory')
     # Predicted length of the trajectory parameter
-    parser.add_argument('--pred_length', type=int, default=3,
+    parser.add_argument('--pred_length', type=int, default=10,
                         help='Predicted length of the trajectory')
     # Test dataset
     parser.add_argument('--test_dataset', type=int, default=0,
@@ -68,7 +103,6 @@ def main():
     # Define the path for the config file for saved args
     with open(os.path.join('save', 'social_config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
-
     # Create a SocialModel object with the saved_args and infer set to true
     model = SocialModel(saved_args, True)
     # Initialize a TensorFlow session
@@ -94,7 +128,8 @@ def main():
     data_loader.reset_batch_pointer()
 
     # Variable to maintain total error
-    total_error = 0
+    total_mean_error = 0
+    total_final_error = 0
     # For each batch
     for b in range(data_loader.num_batches):
         # Get the source, target and dataset data for the next batch
@@ -103,10 +138,11 @@ def main():
         # Batch size is 1
         x_batch, y_batch, d_batch = x[0], y[0], d[0]
 
-        if d_batch == 0 and dataset[0] == 0:
+        if d_batch == 2 and dataset[2] == 2:
+            print('Low scale scene found.')
             dimensions = [640, 480]
         else:
-            dimensions = [720, 576]
+            dimensions = [1920, 1080]
 
         grid_batch = getSequenceGridMask(x_batch, dimensions, saved_args.neighborhood_size, saved_args.grid_size)
 
@@ -118,12 +154,14 @@ def main():
 
         # ipdb.set_trace()
         # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
-        total_error += get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
+        total_mean_error += get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
+        total_final_error += get_final_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
 
         print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
 
     # Print the mean error across all the batches
-    print("Total mean error of the model is " , total_error / data_loader.num_batches)
+    print("Total mean error of the model is ", total_mean_error / data_loader.num_batches)
+    print("Total final error of the model is ", total_final_error / data_loader.num_batches)
 
 
 if __name__ == '__main__':

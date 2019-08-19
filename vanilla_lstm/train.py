@@ -1,12 +1,11 @@
-import numpy as np
 import tensorflow as tf
 import argparse
 import os
 import time
 import pickle
 
-from model import Model
-from utils import DataLoader
+from vanilla_lstm.model import Model
+from vanilla_lstm.utils import DataLoader
 
 
 def main():
