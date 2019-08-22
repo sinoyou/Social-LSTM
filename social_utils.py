@@ -23,7 +23,7 @@ class SocialDataLoader():
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
         dir = os.path.join('data', 'MOT16Filter', 'train')
         self.data_files = [dir + '\MOT16-' + subname + '-scale' + '.csv' for subname in
-                           ['02', '04', '05', '09', '10', '11', '13']]
+                           ['02', '04', '09', '10', '11', '13']]
 
         # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
         self.used_data_files = [self.data_files[x] for x in datasets]
