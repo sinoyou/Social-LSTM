@@ -22,7 +22,8 @@ class SocialDataLoader():
         #                  './data/ucy/univ']
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
         dir = os.path.join('data', 'MOT16Filter', 'train')
-        self.data_files = [dir + '\MOT16-' + subname + '.csv' for subname in ['02', '04', '05', '09', '10', '11', '13']]
+        self.data_files = [dir + '\MOT16-' + subname + '-scale' + '.csv' for subname in
+                           ['02', '04', '05', '09', '10', '11', '13']]
 
         # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
         self.used_data_files = [self.data_files[x] for x in datasets]
@@ -99,7 +100,7 @@ class SocialDataLoader():
             # Initialize the list of numPeds for the current dataset
             numPeds_data.append([])
             # Initialize the numpy array for the current dataset
-            all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 3)))
+            all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 5)))
 
             # index to maintain the current frame
             curr_frame = 0
@@ -127,9 +128,11 @@ class SocialDataLoader():
                     # Extract their x and y positions
                     current_x = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
                     current_y = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
+                    current_scale_x = pedsInFrame[4, pedsInFrame[1, :] == ped][0]
+                    current_scale_y = pedsInFrame[5, pedsInFrame[1, :] == ped][0]
 
                     # Add their pedID, x, y to the row of the numpy array
-                    pedsWithPos.append([ped, current_x, current_y])
+                    pedsWithPos.append([ped, current_x, current_y, current_scale_x, current_scale_y])
 
                 # Add the details of all the peds in the current frame to all_frame_data
                 all_frame_data[dataset_index][curr_frame, 0:len(pedsList), :] = np.array(pedsWithPos)
@@ -198,8 +201,8 @@ class SocialDataLoader():
                 pedID_list = np.unique(seq_frame_data[:, :, 0])
                 numUniquePeds = pedID_list.shape[0]
 
-                sourceData = np.zeros((self.seq_length, self.maxNumPeds, 3))
-                targetData = np.zeros((self.seq_length, self.maxNumPeds, 3))
+                sourceData = np.zeros((self.seq_length, self.maxNumPeds, 5))
+                targetData = np.zeros((self.seq_length, self.maxNumPeds, 5))
 
                 for seq in range(self.seq_length):
                     sseq_frame_data = seq_source_frame_data[seq, :]

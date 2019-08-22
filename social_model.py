@@ -49,11 +49,11 @@ class SocialModel():
         # A sequence contains an ordered set of consecutive frames
         # Each frame can contain a maximum of 'args.maxNumPeds' number of peds
         # For each ped we have their (pedID, x, y) positions as input
-        self.input_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 3], name="input_data")
+        self.input_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 5], name="input_data")
 
         # target data would be the same format as input_data except with
         # one time-step ahead
-        self.target_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 3], name="target_data")
+        self.target_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 5], name="target_data")
 
         # Grid data would be a binary matrix which encodes whether a pedestrian is present in
         # a grid cell of other pedestrian
@@ -65,7 +65,7 @@ class SocialModel():
         self.lr = tf.Variable(args.learning_rate, trainable=False, name="learning_rate")
 
         # Output dimension of the model
-        self.output_size = 5
+        self.output_size = 7
 
         # Define embedding and output layers
         self.define_embedding_and_output_layers(args)
@@ -121,7 +121,7 @@ class SocialModel():
             print
             "Frame number", seq
 
-            current_frame_data = frame  # MNP x 3 tensor
+            current_frame_data = frame  # MNP x 5 tensor
             current_grid_frame_data = grid_frame_data[seq]  # MNP x MNP x (GS**2) tensor
             # yzn : social tensor 在原始源代码中根本没有启用。
             social_tensor = self.getSocialTensor(current_grid_frame_data,
@@ -138,7 +138,7 @@ class SocialModel():
 
                 with tf.name_scope("extract_input_ped"):
                     # Extract x and y positions of the current ped
-                    self.spatial_input = tf.slice(current_frame_data, [ped, 1], [1, 2])  # Tensor of shape (1,2)
+                    self.spatial_input = tf.slice(current_frame_data, [ped, 1], [1, 4])  # Tensor of shape (1,4)
                     # Extract the social tensor of the current ped
                     self.tensor_input = tf.slice(social_tensor, [ped, 0], [1,
                                                                            args.grid_size * args.grid_size * args.rnn_size])  # Tensor of shape (1, g*g*r)
@@ -192,7 +192,7 @@ class SocialModel():
                     # If it is a non-existent ped, it should not contribute to cost
                     self.cost = tf.where(tf.equal(pedID, nonexistent_ped), self.cost, tf.add(self.cost, lossfunc))
                     self.counter = tf.where(tf.not_equal(pedID, nonexistent_ped), tf.add(self.counter, self.increment),
-                                             self.counter)
+                                            self.counter)
 
         with tf.name_scope("mean_cost"):
             # Mean of the cost
@@ -225,7 +225,7 @@ class SocialModel():
     def define_embedding_and_output_layers(self, args):
         # Define variables for the spatial coordinates embedding layer
         with tf.variable_scope("coordinate_embedding"):
-            self.embedding_w = tf.get_variable("embedding_w", [2, args.embedding_size],
+            self.embedding_w = tf.get_variable("embedding_w", [4, args.embedding_size],
                                                initializer=tf.truncated_normal_initializer(stddev=0.01))
             self.embedding_b = tf.get_variable("embedding_b", [args.embedding_size],
                                                initializer=tf.constant_initializer(0.01))
@@ -319,7 +319,7 @@ class SocialModel():
         z = output
         # Split the output into 5 parts corresponding to means, std devs and corr
         # z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(1, 5, z)
-        z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(z, 5, 1)
+        z_mux, z_muy, z_sx, z_sy, z_corr, _, _ = tf.split(z, 7, 1)
 
         # The output must be exponentiated for the std devs
         z_sx = tf.exp(z_sx)
@@ -391,8 +391,8 @@ class SocialModel():
         # print "Fitting"
         # For each frame in the sequence
         for index, frame in enumerate(traj[:-1]):
-            data = np.reshape(frame, (1, self.maxNumPeds, 3))
-            target_data = np.reshape(traj[index + 1], (1, self.maxNumPeds, 3))
+            data = np.reshape(frame, (1, self.maxNumPeds, 5))
+            target_data = np.reshape(traj[index + 1], (1, self.maxNumPeds, 5))
             grid_data = np.reshape(grid[index, :],
                                    (1, self.maxNumPeds, self.maxNumPeds, self.grid_size * self.grid_size))
 
@@ -406,10 +406,10 @@ class SocialModel():
 
         last_frame = traj[-1]
 
-        prev_data = np.reshape(last_frame, (1, self.maxNumPeds, 3))
+        prev_data = np.reshape(last_frame, (1, self.maxNumPeds, 5))
         prev_grid_data = np.reshape(grid[-1], (1, self.maxNumPeds, self.maxNumPeds, self.grid_size * self.grid_size))
 
-        prev_target_data = np.reshape(true_traj[traj.shape[0]], (1, self.maxNumPeds, 3))
+        prev_target_data = np.reshape(true_traj[traj.shape[0]], (1, self.maxNumPeds, 5))
         # print "Prediction"
         # Prediction
         for t in range(num):
@@ -419,18 +419,18 @@ class SocialModel():
             # print cost
             # Output is a list of lists where the inner lists contain matrices of shape 1x5. The outer list contains only one element (since seq_length=1) and the inner list contains maxNumPeds elements
             # output = output[0]
-            newpos = np.zeros((1, self.maxNumPeds, 3))
+            newpos = np.zeros((1, self.maxNumPeds, 5))
             for pedindex, pedoutput in enumerate(output):
-                [o_mux, o_muy, o_sx, o_sy, o_corr] = np.split(pedoutput[0], 5, 0)
+                [o_mux, o_muy, o_sx, o_sy, o_corr, scale_x, scale_y] = np.split(pedoutput[0], 7, 0)
                 mux, muy, sx, sy, corr = o_mux[0], o_muy[0], np.exp(o_sx[0]), np.exp(o_sy[0]), np.tanh(o_corr[0])
                 next_x, next_y = self.sample_gaussian_2d(mux, muy, sx, sy, corr)
 
-                newpos[0, pedindex, :] = [prev_data[0, pedindex, 0], next_x, next_y]
+                newpos[0, pedindex, :] = [prev_data[0, pedindex, 0], next_x, next_y, scale_x, scale_y]
             ret = np.vstack((ret, newpos))
             prev_data = newpos
             prev_grid_data = getSequenceGridMask(prev_data, dimensions, self.args.neighborhood_size, self.grid_size)
             if t != num - 1:
-                prev_target_data = np.reshape(true_traj[traj.shape[0] + t + 1], (1, self.maxNumPeds, 3))
+                prev_target_data = np.reshape(true_traj[traj.shape[0] + t + 1], (1, self.maxNumPeds, 5))
 
         # The returned ret is of shape (obs_length+pred_length) x maxNumPeds x 3
         return ret

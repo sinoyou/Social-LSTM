@@ -12,7 +12,7 @@ def getGridMask(frame, dimensions, neighborhood_size, grid_size):
     This function computes the binary mask that represents the
     occupancy of each ped in the other's grid
     params:
-    frame : This will be a MNP x 3 matrix with each row being [pedID, x, y]
+    frame : This will be a MNP x 5 matrix with each row being [pedID, x, y, scale-x, scale-y]
     dimensions : This will be a list [width, height]
     neighborhood_size : Scalar value representing the size of neighborhood considered
     grid_size : Scalar value representing the size of the grid discretization
@@ -71,7 +71,7 @@ def getSequenceGridMask(sequence, dimensions, neighborhood_size, grid_size):
     '''
     Get the grid masks for all the frames in the sequence
     params:
-    sequence : A numpy matrix of shape SL x MNP x 3
+    sequence : A numpy matrix of shape SL x MNP x 5
     dimensions : This will be a list [width, height]
     neighborhood_size : Scalar value representing the size of neighborhood considered
     grid_size : Scalar value representing the size of the grid discretization
