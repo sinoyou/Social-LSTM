@@ -62,16 +62,17 @@ def main():
     parser.add_argument('--maxNumPeds', type=int, default=55,
                         help='Maximum Number of Pedestrians')
     # The leave out dataset
-    parser.add_argument('--leaveDataset', type=int, default=2,
+    parser.add_argument('--leaveDataset', type=int, default=None,
                         help='The dataset index to be left out in training')
     args = parser.parse_args()
     train(args)
 
 
 def train(args):
-    datasets = list(range(7))
+    datasets = [0, 1, 4, 5]
     # Remove the leaveDataset from datasets
-    datasets.remove(args.leaveDataset)
+    if args.leaveDataset:
+        datasets.remove(args.leaveDataset)
 
     # Create the SocialDataLoader object
     data_loader = SocialDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, datasets, forcePreProcess=True)

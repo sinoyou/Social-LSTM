@@ -129,8 +129,8 @@ def evaluate(dataset, model, sess, sample_args, saved_args):
             print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
 
     # Print the mean error across all the batches
-    print("Total mean error of the model is ", total_mean_error / data_loader.num_batches)
-    print("Total final error of the model is ", total_final_error / data_loader.num_batches)
+    print(dataset, "Total mean error of the model is ", total_mean_error / data_loader.num_batches)
+    print(dataset, "Total final error of the model is ", total_final_error / data_loader.num_batches)
 
 
 def main(test_dataset):
@@ -174,5 +174,5 @@ def main(test_dataset):
 
 
 if __name__ == '__main__':
-    test_datasets = [0, 1, 3, 4, 5, 6]
+    test_datasets = [3, 4]
     main(test_datasets)
