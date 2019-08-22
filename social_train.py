@@ -4,6 +4,7 @@ import os
 import time
 import pickle
 
+import path_static
 from social_model import SocialModel
 from social_utils import SocialDataLoader
 from grid import getSequenceGridMask
@@ -32,7 +33,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=100,
+    parser.add_argument('--save_every', type=int, default=50,
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped
@@ -75,7 +76,19 @@ def train(args):
     # Create the SocialDataLoader object
     data_loader = SocialDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, datasets, forcePreProcess=True)
 
-    with open(os.path.join('save', 'social_config.pkl'), 'wb') as f:
+    savepath = path_static.save_path
+    # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
+    if os.path.exists(savepath):
+        print("[WARNING]: Save Path Already Exists. Do you want to continue ? ")
+        command = input('[y/n]:')
+        if len(command) == 1 and command.lower()[0] == 'y':
+            pass
+        else:
+            exit(0)
+    else:
+        os.mkdir(savepath)
+
+    with open(os.path.join(savepath, 'social_config.pkl'), 'wb') as f:
         pickle.dump(args, f)
 
     # Create a SocialModel object with the arguments
@@ -150,8 +163,9 @@ def train(args):
 
                 # Save the model if the current epoch and batch number match the frequency
                 if (e * data_loader.num_batches + b) % args.save_every == 0 and ((e * data_loader.num_batches + b) > 0):
-                    checkpoint_path = os.path.join('save', 'social_model.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b, write_meta_graph=False)
+                    checkpoint_path = os.path.join(savepath, 'social_model.ckpt')
+                    saver.save(sess, checkpoint_path, global_step=e * data_loader.num_batches + b,
+                               write_meta_graph=False)
                     print("model saved to {}".format(checkpoint_path))
 
 

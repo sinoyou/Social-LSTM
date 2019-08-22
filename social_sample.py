@@ -9,6 +9,8 @@ from social_utils import SocialDataLoader
 from social_model import SocialModel
 from grid import getSequenceGridMask
 
+import path_static
+
 
 # from social_train import getSocialGrid, getSocialTensor
 
@@ -85,41 +87,7 @@ def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     return np.mean(error)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    # Observed length of the trajectory parameter
-    parser.add_argument('--obs_length', type=int, default=10,
-                        help='Observed length of the trajectory')
-    # Predicted length of the trajectory parameter
-    parser.add_argument('--pred_length', type=int, default=10,
-                        help='Predicted length of the trajectory')
-    # Test dataset
-    parser.add_argument('--test_dataset', type=int, default=0,
-                        help='Dataset to be tested on')
-
-    # Parse the parameters
-    sample_args = parser.parse_args()
-
-    # Define the path for the config file for saved args
-    with open(os.path.join('save', 'social_config.pkl'), 'rb') as f:
-        saved_args = pickle.load(f)
-    # Create a SocialModel object with the saved_args and infer set to true
-    model = SocialModel(saved_args, True)
-    # Initialize a TensorFlow session
-    sess = tf.InteractiveSession()
-    # Initialize a saver
-    saver = tf.train.Saver()
-
-    # Get the checkpoint state for the model
-    ckpt = tf.train.get_checkpoint_state('save')
-    print('loading model: ', ckpt.model_checkpoint_path)
-
-    # Restore the model at the checkpoint
-    saver.restore(sess, ckpt.model_checkpoint_path)
-
-    # Dataset to get data from
-    dataset = [sample_args.test_dataset]
-
+def evaluate(dataset, model, sess, sample_args, saved_args):
     # Create a SocialDataLoader object with batch_size 1 and seq_length equal to observed_length + pred_length
     data_loader = SocialDataLoader(1, sample_args.pred_length + sample_args.obs_length, saved_args.maxNumPeds, dataset,
                                    True)
@@ -138,7 +106,7 @@ def main():
         # Batch size is 1
         x_batch, y_batch, d_batch = x[0], y[0], d[0]
 
-        if d_batch == 2 and dataset[2] == 2:
+        if d_batch == 2 and dataset[0] == 2:
             print('Low scale scene found.')
             dimensions = [640, 480]
         else:
@@ -157,12 +125,54 @@ def main():
         total_mean_error += get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
         total_final_error += get_final_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
 
-        print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
+        if b % 10 == 0:
+            print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
 
     # Print the mean error across all the batches
     print("Total mean error of the model is ", total_mean_error / data_loader.num_batches)
     print("Total final error of the model is ", total_final_error / data_loader.num_batches)
 
 
+def main(test_dataset):
+    parser = argparse.ArgumentParser()
+    # Observed length of the trajectory parameter
+    parser.add_argument('--obs_length', type=int, default=10,
+                        help='Observed length of the trajectory')
+    # Predicted length of the trajectory parameter
+    parser.add_argument('--pred_length', type=int, default=10,
+                        help='Predicted length of the trajectory')
+    # Test dataset
+    parser.add_argument('--test_dataset', type=int, default=0,
+                        help='Dataset to be tested on')
+
+    # Parse the parameters
+    sample_args = parser.parse_args()
+
+    savepath = path_static.save_path
+    # Define the path for the config file for saved args
+    with open(os.path.join(savepath, 'social_config.pkl'), 'rb') as f:
+        saved_args = pickle.load(f)
+    # Create a SocialModel object with the saved_args and infer set to true
+    model = SocialModel(saved_args, True)
+    # Initialize a TensorFlow session
+    sess = tf.InteractiveSession()
+    # Initialize a saver
+    saver = tf.train.Saver()
+
+    # Get the checkpoint state for the model
+    ckpt = tf.train.get_checkpoint_state(savepath)
+    print('loading model: ', ckpt.model_checkpoint_path)
+
+    # Restore the model at the checkpoint
+    saver.restore(sess, ckpt.model_checkpoint_path)
+
+    # Dataset to get data from
+    # dataset = [sample_args.test_dataset]
+    dataset = test_dataset
+    for i in dataset:
+        evaluate([i], model, sess, sample_args, saved_args)
+
+
 if __name__ == '__main__':
-    main()
+    test_datasets = [0, 1, 3, 4, 5, 6]
+    main(test_datasets)
