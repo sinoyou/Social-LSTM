@@ -125,8 +125,8 @@ class SocialDataLoader():
                 # For each ped in the current frame
                 for ped in pedsList:
                     # Extract their x and y positions
-                    current_x = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
-                    current_y = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
+                    current_x = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
+                    current_y = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
 
                     # Add their pedID, x, y to the row of the numpy array
                     pedsWithPos.append([ped, current_x, current_y])
