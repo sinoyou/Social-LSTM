@@ -174,5 +174,5 @@ def main(test_dataset):
 
 
 if __name__ == '__main__':
-    test_datasets = [3, 4]
+    test_datasets = [2, 3]
     main(test_datasets)
