@@ -27,6 +27,7 @@ class SocialDataLoader():
                            self.mot16_index]
 
         # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
+        self.used_mot16_subname = [self.mot16_index[x] for x in datasets]
         self.used_data_files = [self.data_files[x] for x in datasets]
 
         # Number of datasets
@@ -270,4 +271,4 @@ class SocialDataLoader():
         self.frame_pointer = 0
 
     def get_mot16_subname(self, index):
-        return self.mot16_index[index]
+        return self.used_mot16_subname[index]

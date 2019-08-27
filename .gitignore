@@ -11,4 +11,4 @@ save
 *.backup
 test.py
 .idea/
-gpu_test.py
+tool/gpu_test.py

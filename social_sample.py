@@ -87,17 +87,26 @@ def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     return np.mean(error)
 
 
-def trajectory_record(dataset, real_traj, gen_traj, frame_batch, obs_len, mean_error, final_error):
+def trajectory_dict_generate(dataset, real_traj, gen_traj, frame_seq, obs_len):
     dict = {}
-    dict['mean_error'] = mean_error
-    dict['final_error'] = final_error
     dict['dataset'] = dataset
-    dict['real'] = real_traj
-    dict['generate'] = gen_traj
-    dict['frames'] = frame_batch
+    dict['real_traj'] = real_traj
+    dict['generate_traj'] = gen_traj
+    dict['frame_seq'] = frame_seq
     dict['obs_length'] = obs_len
     return dict
 
+
+def trajectory_record(dataset, real_traj_batch, gen_traj_batch, frame_batch, obs_length):
+    maxNumPeds = real_traj_batch.shape[1]
+    list = []
+    for i in range(maxNumPeds):
+        real_traj = np.squeeze(real_traj_batch[:, i, :])
+        gen_traj = np.squeeze(gen_traj_batch[:, i, :])
+        traj_dict_raw = trajectory_dict_generate(dataset, real_traj, gen_traj, frame_batch, obs_length)
+        list.append(traj_dict_raw)
+
+    return list
 
 
 def evaluate(dataset, model, sess, sample_args, saved_args):
@@ -144,9 +153,9 @@ def evaluate(dataset, model, sess, sample_args, saved_args):
         total_final_error += final_error
 
         # trajectory dictionary generator
-        dict = trajectory_record(data_loader.get_mot16_subname(dataset), x_batch, complete_traj, frame_batch,
-                                 sample_args.obs_length, mean_error, final_error)
-        traj_list.append(dict)
+        list = trajectory_record(data_loader.get_mot16_subname(d_batch), x_batch, complete_traj, frame_batch,
+                                 sample_args.obs_length)
+        traj_list += list
 
         if b % 10 == 0:
             print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
@@ -202,7 +211,7 @@ def main(test_dataset):
         traj_list += list
 
     # save trajectory
-    traj_file = open(savepath + 'traj_file', 'wb')
+    traj_file = open(os.path.join(savepath, 'traj_file_raw'), 'wb')
     pickle.dump(traj_list, traj_file)
 
 
