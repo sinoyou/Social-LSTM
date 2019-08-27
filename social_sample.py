@@ -87,6 +87,19 @@ def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     return np.mean(error)
 
 
+def trajectory_record(dataset, real_traj, gen_traj, frame_batch, obs_len, mean_error, final_error):
+    dict = {}
+    dict['mean_error'] = mean_error
+    dict['final_error'] = final_error
+    dict['dataset'] = dataset
+    dict['real'] = real_traj
+    dict['generate'] = gen_traj
+    dict['frames'] = frame_batch
+    dict['obs_length'] = obs_len
+    return dict
+
+
+
 def evaluate(dataset, model, sess, sample_args, saved_args):
     # Create a SocialDataLoader object with batch_size 1 and seq_length equal to observed_length + pred_length
     data_loader = SocialDataLoader(1, sample_args.pred_length + sample_args.obs_length, saved_args.maxNumPeds, dataset,
@@ -95,16 +108,19 @@ def evaluate(dataset, model, sess, sample_args, saved_args):
     # Reset all pointers of the data_loader
     data_loader.reset_batch_pointer()
 
+    # yzn : list for saving each trajectory information
+    traj_list = []
+
     # Variable to maintain total error
     total_mean_error = 0
     total_final_error = 0
     # For each batch
     for b in range(data_loader.num_batches):
         # Get the source, target and dataset data for the next batch
-        x, y, d = data_loader.next_batch()
+        x, y, f, d = data_loader.next_batch()
 
         # Batch size is 1
-        x_batch, y_batch, d_batch = x[0], y[0], d[0]
+        x_batch, y_batch, frame_batch, d_batch = x[0], y[0], f[0], d[0]
 
         if d_batch == 2 and dataset[0] == 2:
             print('Low scale scene found.')
@@ -122,8 +138,15 @@ def evaluate(dataset, model, sess, sample_args, saved_args):
 
         # ipdb.set_trace()
         # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
-        total_mean_error += get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
-        total_final_error += get_final_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
+        mean_error = get_mean_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
+        final_error = get_final_error(complete_traj, x[0], sample_args.obs_length, saved_args.maxNumPeds)
+        total_mean_error += mean_error
+        total_final_error += final_error
+
+        # trajectory dictionary generator
+        dict = trajectory_record(data_loader.get_mot16_subname(dataset), x_batch, complete_traj, frame_batch,
+                                 sample_args.obs_length, mean_error, final_error)
+        traj_list.append(dict)
 
         if b % 10 == 0:
             print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
@@ -131,6 +154,8 @@ def evaluate(dataset, model, sess, sample_args, saved_args):
     # Print the mean error across all the batches
     print("Total mean error of the model is ", total_mean_error / data_loader.num_batches)
     print("Total final error of the model is ", total_final_error / data_loader.num_batches)
+
+    return traj_list
 
 
 def main(test_dataset):
@@ -166,11 +191,19 @@ def main(test_dataset):
     # Restore the model at the checkpoint
     saver.restore(sess, ckpt.model_checkpoint_path)
 
+    # 用于记录测试数据库的轨迹数据
+    traj_list = []
+
     # Dataset to get data from
     # dataset = [sample_args.test_dataset]
     dataset = test_dataset
     for i in dataset:
-        evaluate([i], model, sess, sample_args, saved_args)
+        list = evaluate([i], model, sess, sample_args, saved_args)
+        traj_list += list
+
+    # save trajectory
+    traj_file = open(savepath + 'traj_file', 'wb')
+    pickle.dump(traj_list, traj_file)
 
 
 if __name__ == '__main__':

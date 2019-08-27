@@ -432,5 +432,5 @@ class SocialModel():
             if t != num - 1:
                 prev_target_data = np.reshape(true_traj[traj.shape[0] + t + 1], (1, self.maxNumPeds, 5))
 
-        # The returned ret is of shape (obs_length+pred_length) x maxNumPeds x 3
+        # The returned ret is of shape (obs_length+pred_length) x maxNumPeds x 5
         return ret

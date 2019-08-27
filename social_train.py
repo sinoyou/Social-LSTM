@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=50,
+    parser.add_argument('--save_every', type=int, default=5,
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped
@@ -71,7 +71,7 @@ def main():
 def train(args):
     datasets = [0, 1, 4, 5]
     # Remove the leaveDataset from datasets
-    if args.leaveDatset:
+    if args.leaveDataset:
         datasets.remove(args.leaveDataset)
 
     # Create the SocialDataLoader object
@@ -121,7 +121,7 @@ def train(args):
                 # Get the source, target and dataset data for the next batch
                 # x, y are input and target data which are lists containing numpy arrays of size seq_length x maxNumPeds x 3
                 # d is the list of dataset indices from which each batch is generated (used to differentiate between datasets)
-                x, y, d = data_loader.next_batch()
+                x, y, _, d = data_loader.next_batch()
 
                 # variable to store the loss for this batch
                 loss_batch = 0

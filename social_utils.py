@@ -22,8 +22,9 @@ class SocialDataLoader():
         #                  './data/ucy/univ']
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
         dir = os.path.join('data', 'MOT16Filter', 'train')
+        self.mot16_index = ['02', '04', '09', '10', '11', '13']
         self.data_files = [dir + '\MOT16-' + subname + '-scale' + '.csv' for subname in
-                           ['02', '04', '09', '10', '11', '13']]
+                           self.mot16_index]
 
         # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
         self.used_data_files = [self.data_files[x] for x in datasets]
@@ -100,7 +101,7 @@ class SocialDataLoader():
             # Initialize the list of numPeds for the current dataset
             numPeds_data.append([])
             # Initialize the numpy array for the current dataset
-            all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 5)))
+            all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 6)))
 
             # index to maintain the current frame
             curr_frame = 0
@@ -132,7 +133,7 @@ class SocialDataLoader():
                     current_scale_y = pedsInFrame[5, pedsInFrame[1, :] == ped][0]
 
                     # Add their pedID, x, y to the row of the numpy array
-                    pedsWithPos.append([ped, current_x, current_y, current_scale_x, current_scale_y])
+                    pedsWithPos.append([ped, current_x, current_y, current_scale_x, current_scale_y, frame])
 
                 # Add the details of all the peds in the current frame to all_frame_data
                 all_frame_data[dataset_index][curr_frame, 0:len(pedsList), :] = np.array(pedsWithPos)
@@ -182,6 +183,8 @@ class SocialDataLoader():
         x_batch = []
         # Target data
         y_batch = []
+        # Frame details
+        frame_batch = []
         # Dataset data
         d = []
         # Iteration index
@@ -203,6 +206,10 @@ class SocialDataLoader():
 
                 sourceData = np.zeros((self.seq_length, self.maxNumPeds, 5))
                 targetData = np.zeros((self.seq_length, self.maxNumPeds, 5))
+                frameData = np.zeros((self.seq_length, 1))
+
+                # 增加stop list，检测有无中断轨迹的情况
+                stop_list = []
 
                 for seq in range(self.seq_length):
                     sseq_frame_data = seq_source_frame_data[seq, :]
@@ -213,15 +220,25 @@ class SocialDataLoader():
                         if pedID == 0:
                             continue
                         else:
-                            sped = sseq_frame_data[sseq_frame_data[:, 0] == pedID, :]
+                            sped = np.squeeze(sseq_frame_data[sseq_frame_data[:, 0] == pedID, :])
                             tped = np.squeeze(tseq_frame_data[tseq_frame_data[:, 0] == pedID, :])
-                            if sped.size != 0:
-                                sourceData[seq, ped, :] = sped
-                            if tped.size != 0:
-                                targetData[seq, ped, :] = tped
+                            if sped.size != 0 or tped.size != 0:
+                                if sped.size != 0:
+                                    sourceData[seq, ped, :] = sped[:5]
+                                    frameData[seq, 0] = sped[5]
+                                if tped.size != 0:
+                                    targetData[seq, ped, :] = tped[:5]
+
+                                # 断点统计
+                                if sped.size != 0 and tped.size == 0:
+                                    stop_list.append(pedID)
+                                # 断点检查
+                                if sped.size == 0 and tped.size != 0 and pedID in stop_list:
+                                    print('[Error]:出现中途中断的轨迹')
 
                 x_batch.append(sourceData)
                 y_batch.append(targetData)
+                frame_batch.append(frameData)
                 self.frame_pointer += self.seq_length
                 d.append(self.dataset_pointer)
                 i += 1
@@ -230,7 +247,7 @@ class SocialDataLoader():
                 # Increment the dataset pointer and set the frame_pointer to zero
                 self.tick_batch_pointer()
 
-        return x_batch, y_batch, d
+        return x_batch, y_batch, frame_batch, d
 
     def tick_batch_pointer(self):
         '''
@@ -251,3 +268,6 @@ class SocialDataLoader():
         # Go to the first frame of the first dataset
         self.dataset_pointer = 0
         self.frame_pointer = 0
+
+    def get_mot16_subname(self, index):
+        return self.mot16_index[index]
