@@ -22,9 +22,9 @@ def getGridMask(frame, dimensions, neighborhood_size, grid_size):
     mnp = frame.shape[0]
     width, height = dimensions[0], dimensions[1]
 
-    frame_mask = np.zeros((mnp, mnp, grid_size**2))
+    frame_mask = np.zeros((mnp, mnp, grid_size ** 2))
 
-    width_bound, height_bound = neighborhood_size/(width*1.0), neighborhood_size/(height*1.0)
+    width_bound, height_bound = neighborhood_size / (width * 1.0), neighborhood_size / (height * 1.0)
 
     # For each ped in the frame (existent and non-existent)
     for pedindex in range(mnp):
@@ -36,8 +36,8 @@ def getGridMask(frame, dimensions, neighborhood_size, grid_size):
         # Get x and y of the current ped
         current_x, current_y = frame[pedindex, 1], frame[pedindex, 2]
 
-        width_low, width_high = current_x - width_bound/2, current_x + width_bound/2
-        height_low, height_high = current_y - height_bound/2, current_y + height_bound/2
+        width_low, width_high = current_x - width_bound / 2, current_x + width_bound / 2
+        height_low, height_high = current_y - height_bound / 2, current_y + height_bound / 2
 
         # For all the other peds
         for otherpedindex in range(mnp):
@@ -58,11 +58,13 @@ def getGridMask(frame, dimensions, neighborhood_size, grid_size):
                 continue
 
             # If in surrounding, calculate the grid cell
-            cell_x = int(np.floor(((other_x - width_low)/width_bound) * grid_size))
-            cell_y = int(np.floor(((other_y - height_low)/height_bound) * grid_size))
-
+            cell_x = int(np.floor(((other_x - width_low) / width_bound) * grid_size))
+            cell_y = int(np.floor(((other_y - height_low) / height_bound) * grid_size))
+            # 浮点数精度问题，可能存在越界的可能
+            cell_x = min(1, cell_x)
+            cell_y = min(1, cell_y)
             # Other ped is in the corresponding grid cell of current ped
-            frame_mask[pedindex, otherpedindex, cell_x + cell_y*grid_size] = 1
+            frame_mask[pedindex, otherpedindex, cell_x + cell_y * grid_size] = 1
 
     return frame_mask
 
@@ -83,7 +85,7 @@ def getSequenceGridMask(sequence, dimensions, neighborhood_size, grid_size):
     #   neighborhood size用于在dimensions全局环境下划分的grid边界，相除区间处于0-1，恰好符合输入数据的规格要求。
     sl = sequence.shape[0]
     mnp = sequence.shape[1]
-    sequence_mask = np.zeros((sl, mnp, mnp, grid_size**2))
+    sequence_mask = np.zeros((sl, mnp, mnp, grid_size ** 2))
 
     for i in range(sl):
         sequence_mask[i, :, :, :] = getGridMask(sequence[i, :, :], dimensions, neighborhood_size, grid_size)

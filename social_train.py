@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=5,
+    parser.add_argument('--save_every', type=int, default=50,
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped

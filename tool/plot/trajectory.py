@@ -28,26 +28,35 @@ class Trajectory:
     def get_mot16_subname(self):
         return self.dataset
 
-    def is_worth_show(self):
+    def is_worth_show(self, max_ade_error=0.10):
         """
         根据某些指标（如误差）判断该轨迹是否值得展示
         :return:
         """
+        loss, counter = self.calculate_total_loss()
+        if counter == 0:
+            return False
+        else:
+            ave_loss = loss / counter
+            if ave_loss < max_ade_error:
+                return True
+            else:
+                return False
+
+    def calculate_total_loss(self):
+        """
+        返回真实轨迹相对于所有生成轨迹的误差累加值，若要计算平均误差需要除以counter
+        :return: (total_loss, counter)
+        """
         counter = 0
         loss = 0
-        valid_obs, valid_pred = self.detect_valid_length()
         for (key, value) in self.gen_traj.items():
             gen_traj = value
-            for j in range(self.obs_length + valid_pred - 1, self.real_traj.shape[0]):
+            for j in range(self.obs_length, self.real_traj.shape[0]):
                 if self.real_traj[j][0] != 0:
                     counter += 1
                     loss += np.linalg.norm(self.real_traj[j, [1, 2]] - gen_traj[j, [1, 2]])
-
-        ave_loss = loss / counter
-        if ave_loss < 0.03:
-            return True
-        else:
-            return False
+        return loss, counter
 
     def get_real_trajectory(self):
         """
@@ -63,11 +72,17 @@ class Trajectory:
         return self.obs_length
 
     def add_generate_trajectory(self, gen_traj, name):
+        """
+        增加一条生成的轨迹
+        :param gen_traj: (seq_length, 5), 5 - pedID, x, y, width, height
+        :param name: 轨迹名称
+        """
         self.gen_traj[name] = gen_traj.copy()
 
     def detect_valid_length(self):
         """
-        根据真实路径中行人id的分布，返回真实路径obs_len前后段的真正有效部分。
+        根据真实路径中行人id的分布情况，返回真实路径obs_len前后段的真正有效部分。
+        * 为什么存在无效部分？：DataLoader按固定时间长度截取一部分序列，行人可能延迟进入场景或提前离开场景
         :return: a tuple (obs_valid_length, pred_valid_length)
         obs_valid_length >= 0. pred_valid_length >= 0
         """

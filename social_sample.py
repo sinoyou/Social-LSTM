@@ -216,5 +216,6 @@ def main(test_dataset):
 
 
 if __name__ == '__main__':
-    test_datasets = [2, 3]
+    # test_datasets = [4]
+    test_datasets = range(0, 6)
     main(test_datasets)
