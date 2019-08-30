@@ -57,7 +57,7 @@ class Plotter:
         tplot = self.__plot_one_trajectory__(traj)
         tplot.show()
 
-    def export_all_trajectory(self):
+    def export_all_trajectory(self, max_error=0.20, min_valid_pred_length=5):
         # 查看总导出文件夹是否存在
         if not os.path.exists(self.export_dir):
             os.mkdir(self.export_dir)
@@ -66,7 +66,7 @@ class Plotter:
         for traj in self.trajectory_list:
             (valid_obs, valid_pred) = traj.detect_valid_length()  # 获取有效长度
             mot16_subname = traj.get_mot16_subname()  # 获取mot16的子数据库名称
-            if traj.is_worth_show(0.20) and valid_pred >= 5:
+            if traj.is_worth_show(max_error) and valid_pred >= min_valid_pred_length:
                 export_sub_dir = os.path.join(self.export_dir, mot16_subname)
                 # 查看子导出文件夹是否存在
                 if not os.path.exists(export_sub_dir):

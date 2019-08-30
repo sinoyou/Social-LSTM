@@ -24,13 +24,13 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=10,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='minibatch size')
     # Length of sequence to be considered parameter
-    parser.add_argument('--seq_length', type=int, default=10,
+    parser.add_argument('--seq_length', type=int, default=5,
                         help='RNN sequence length')
     # Number of epochs parameter
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=500,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
     parser.add_argument('--save_every', type=int, default=50,
@@ -56,7 +56,7 @@ def main():
     parser.add_argument('--neighborhood_size', type=int, default=200,
                         help='Neighborhood size to be considered for social grid')
     # Size of the social grid parameter
-    parser.add_argument('--grid_size', type=int, default=2,
+    parser.add_argument('--grid_size', type=int, default=3,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
     parser.add_argument('--maxNumPeds', type=int, default=55,
@@ -69,7 +69,7 @@ def main():
 
 
 def train(args):
-    datasets = [0, 1, 4, 5]
+    datasets = [0, 1]
     # Remove the leaveDataset from datasets
     if args.leaveDataset:
         datasets.remove(args.leaveDataset)
