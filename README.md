@@ -1,3 +1,5 @@
 # Social LSTM using Tensorflow
 
-**Author** : Anirudh Vemula
+**Original Work** : Anirudh Vemula
+
+**follow-up** : Zinuo You
