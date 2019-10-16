@@ -19,16 +19,36 @@ class KittiDataLoader():
                            seq_length-1 of them are same. If you want to load data with two sequences not public part,
                            please make seq_length = obs_length + pred_length and divide returned value manually.
         :param max_num_peds: maximum number of pedestrians in one scene.
-        :param scene_num: number of scenes in Kitti Database.
+        :param scenes_list: number of scenes in Kitti Database.
         """
         # save parameters
         self.batch_size = batch_size
         self.seq_length = seq_length
         self.max_num_peds = max_num_peds
-        self.scenee_list = scenes_list
+        self.scenes_list = scenes_list
+        self.database_dir = database_dir
 
-        # load data
-        label_files_path = os.path.join(database_dir, 'training', 'label_02')
+        # pre process data
+        list_preprocess_data = self.preprocess()
+
+        # select valid processed sub-sequence of scene with seq_length larger than seq_length
+        self.list_sub_scene_data = [x for x in list_preprocess_data if
+                                    x['data'].shape[0] >= self.seq_length + 1]
+
+        # calculate data's attributes.
+        self.num_sequence = 0
+        self.sub_scene_ptr = 0
+        self.sequence_ptr = 0
+        for data in self.list_sub_scene_data:
+            self.num_sequence += data['data'].shape[0] - (self.seq_length + 1) + 1
+
+    def preprocess(self):
+        """
+        pre process *.txt data to list of maxtirx
+        :return: list of matrix
+        """
+        # load data -> preprocess_files_candidate
+        label_files_path = os.path.join(self.database_dir, 'training', 'label_02')
         label_files = os.listdir(label_files_path)
         names = ['frame', 'track id', 'type', 'truncated', 'occluded', 'alpha',
                  'bbox_left', 'bbox_top', 'bbox_right', 'bbox_bottom',
@@ -36,10 +56,10 @@ class KittiDataLoader():
                  'location_x', 'location_y', "location_z",
                  'rotation_y']
         label_files_candidate = []  # the scenes expected to be loaded.
-        preprocess_data_scenes = []  # list storing data in candidate scenes.
+        preprocess_data = []  # list of sub scene data in candidate scenes.
         for label_file in label_files:
             scene_num = int(str.split(label_file, sep='.')[0])
-            if scene_num in scenes_list:
+            if scene_num in self.scenes_list:
                 label_files_candidate.append(label_file)
         for label_file in label_files_candidate:
             file_path = os.path.join(label_files_path, label_file)
@@ -49,282 +69,98 @@ class KittiDataLoader():
             max_frame_id = raw_data['frame'].max()
             track_id_list = raw_data_target['track id'].unique().tolist()
             # initial store matrix
-            data_matrix = np.zeros((max_frame_id + 1, len(track_id_list), 4 + 3 + 3))   # bbox * 4 + dim * 3 + loc * 3
+            data_matrix = np.zeros(
+                (max_frame_id + 1, len(track_id_list), 1 + 4 + 3 + 3))  # bbox * 4 + dim * 3 + loc * 3
 
+            # fill up a big matrix
             for _, row in raw_data_target.iterrows():
                 index = track_id_list.index(row['track id'])
                 frame = row['frame']
-                data_matrix[frame, index, 0:4] = row['bbox_left'], row['bbox_top'], row['bbox_right'], row[
+                data_matrix[frame, index, 0] = row['track id']
+                data_matrix[frame, index, 1:5] = row['bbox_left'], row['bbox_top'], row['bbox_right'], row[
                     'bbox_bottom']
-                data_matrix[frame, index, 4:7] = row['dimensions_x'], row['dimension_y'], row['dimension_z']
-                data_matrix[frame, index, 7:10] = row['location_x'], row['location_y'], row['location_z']
+                data_matrix[frame, index, 5:8] = row['dimensions_x'], row['dimension_y'], row['dimension_z']
+                data_matrix[frame, index, 8:11] = row['location_x'], row['location_y'], row['location_z']
 
-            preprocess_data_scenes.append(data_matrix)
+            # take out useful time exists at least 1 person (in which the sub-matrix is not full of zero).
+            # lambda expression: determine if sub-matrix x is a valid slice with valid object information.
+            def is_useful(x):
+                return np.sum(np.abs(x)) != 0
+
+            # dump present slice into preprocess list.
+            def dump(slice_buffer):
+                if len(slice_buffer) != 0:
+                    time_length = len(slice_buffer)
+                    dump_dic = {'data': np.concatenate(slice_buffer, axis=0),
+                                'file': label_file,
+                                'start_frame': frame - time_length, 'end_length': frame - 1,
+                                'id_by_index': track_id_list}
+                    preprocess_data.append(dump_dic)
+
+            data_matrix_slice = np.split(data_matrix, indices_or_sections=data_matrix.shape[0], axis=0)
+            slice_buffer = []
+            count = 0
+            length_count = 0
+            for (frame, slice_) in enumerate(data_matrix_slice):
+                # This frame slice is useful (exist valid object)
+                if is_useful(slice_):
+                    slice_buffer.append(slice_)
+                    # last step of the loop
+                    if frame == len(data_matrix_slice) - 1 and len(slice_buffer) != 0:
+                        count += 1
+                        length_count += len(slice_buffer)
+                        dump(slice_buffer)
+                else:
+                    # dump data in buffer and clean
+                    if len(slice_buffer) != 0:
+                        count += 1
+                        length_count += len(slice_buffer)
+                        dump(slice_buffer)
+                    slice_buffer = []
+            print('{} sub scenes in {}, valid length = {}'.format(count, label_file, length_count))
+
+        return preprocess_data
+
+    def __len__(self):
+        return self.num_sequence // self.batch_size
+
+    def next_batch(self):
+        batch_data_full = []
+        batch_data_appendix = []
+        for batch_i in range(0, self.batch_size):
+            sub_scene = self.list_sub_scene_data[self.sub_scene_ptr]
+            sub_scene_data = sub_scene['data']
+            # check present sub scene availability. If not, goto next sub scene.
+            if sub_scene_data.shape[0] < self.sequence_ptr + self.seq_length + 1:
+                self.sub_scene_ptr += 1
+                self.sequence_ptr = 0
+                sub_scene = self.list_sub_scene_data[self.sub_scene_ptr]
+                sub_scene_data = sub_scene['data']
+
+            # form batch slice
+            batch_slice = np.zeros((self.seq_length + 1, self.max_num_peds, 11))
+            begin, end = self.sequence_ptr, self.sequence_ptr + self.seq_length + 1
+            batch_slice[:, 0:len(sub_scene['id_by_index']), :] = sub_scene_data[begin:end, :, :]
+            # Add a batch slice to batch list
+            batch_data_full.append(batch_slice)
+            # Add appendix related to this batch slice, including scene_name, start_frame, end_frame, id_by_index
+            appendix = sub_scene.copy()
+            batch_data_appendix.append(appendix.pop('data'))
+            # self add for next call
+            self.sequence_ptr += 1
+
+        # concatenate and split it into input and output
+        batch_data_full = np.concatenate(batch_data_full, axis=0)
+        batch_x = batch_data_full[0:self.seq_length, :]
+        batch_y = batch_data_full[1:self.seq_length + 1, :]
+        return batch_x, batch_y, batch_data_appendix
+
+    def reset_ptr(self):
+        self.sub_scene_ptr = 0
+        self.sequence_ptr = 0
+
 
 if __name__ == "__main__":
-    kitti_loader = KittiDataLoader(32, 5, 50, [1])
-
-# # The data loader class that loads data from the datasets considering
-# # each frame as a datapoint and a sequence of consecutive frames as the
-# # sequence.
-# class SocialDataLoader():
-#     def __init__(self, batch_size=50, seq_length=5, maxNumPeds=40, datasets=[0, 1, 2, 3, 4], forcePreProcess=False):
-#         '''
-#         Initialiser function for the SocialDataLoader class
-#         params:
-#         batch_size : Size of the mini-batch
-#         grid_size : Size of the social grid constructed
-#         forcePreProcess : Flag to forcefully preprocess the data again from csv files
-#         '''
-#         # List of data directories where raw data resides
-#         dir = os.path.join('data', 'MOT16Filter', 'train')
-#         self.mot16_index = ['02', '04', '09', '10', '11', '13']
-#         self.data_files = [dir + '\MOT16-' + subname + '-scale' + '.csv' for subname in
-#                            self.mot16_index]
-#
-#         # self.used_data_dirs = [self.data_dirs[x] for x in datasets]
-#         self.used_mot16_subname = [self.mot16_index[x] for x in datasets]
-#         self.used_data_files = [self.data_files[x] for x in datasets]
-#
-#         # Number of datasets
-#         # self.numDatasets = len(self.data_dirs)
-#         self.numDatasets = len(self.data_files)
-#
-#         # Data directory where the pre-processed pickle file resides
-#         self.data_dir = './data'
-#
-#         # Maximum number of peds in a single frame (Number obtained by checking the datasets)
-#         self.maxNumPeds = maxNumPeds
-#
-#         # Store the arguments
-#         self.batch_size = batch_size
-#         self.seq_length = seq_length
-#
-#         # Define the path in which the process data would be stored
-#         data_file = os.path.join(self.data_dir, "social-trajectories.cpkl")
-#
-#         # If the file doesn't exist or forcePreProcess is true
-#         if not (os.path.exists(data_file)) or forcePreProcess:
-#             print("Creating pre-processed data from raw data")
-#             # Preprocess the data from the csv files of the datasets
-#             # Note that this data is processed in frames
-#             # self.frame_preprocess(self.used_data_dirs, data_file)
-#             self.frame_preprocess(self.used_data_files, data_file)
-#
-#         # Load the processed data from the pickle file
-#         self.load_preprocessed(data_file)
-#         # Reset all the data pointers of the dataloader object
-#         self.reset_batch_pointer()
-#
-#     def frame_preprocess(self, data_files, data_file):
-#         '''
-#         Function that will pre-process the pixel_pos.csv files of each dataset
-#         into data with occupancy grid that can be used
-#         params:
-#         data_dirs : List of csv files where raw data resides
-#         data_file : The file into which all the pre-processed data needs to be stored
-#         '''
-#
-#         # all_frame_data would be a list of numpy arrays corresponding to each dataset
-#         # Each numpy array would be of size (numFrames, maxNumPeds, 3) where each pedestrian's
-#         # pedId, x, y , in each frame is stored
-#         all_frame_data = []
-#         # frameList_data would be a list of lists corresponding to each dataset
-#         # Each list would contain the frameIds of all the frames in the dataset
-#         frameList_data = []
-#         # numPeds_data would be a list of lists corresponding to each dataset
-#         # Ech list would contain the number of pedestrians in each frame in the dataset
-#         numPeds_data = []
-#         # Index of the current dataset
-#         dataset_index = 0
-#
-#         # For each dataset
-#         for file in data_files:
-#
-#             # Define path of the csv file of the current dataset
-#             # file_path = os.path.join(directory, 'pixel_pos.csv')
-#             file_path = file
-#
-#             # Load the data from the csv file
-#             data = np.genfromtxt(file_path, delimiter=',')
-#
-#             # Frame IDs of the frames in the current dataset
-#             frameList = np.unique(data[0, :]).tolist()
-#             # Number of frames
-#             numFrames = len(frameList)
-#
-#             # Add the list of frameIDs to the frameList_data
-#             frameList_data.append(frameList)
-#             # Initialize the list of numPeds for the current dataset
-#             numPeds_data.append([])
-#             # Initialize the numpy array for the current dataset
-#             all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 6)))
-#
-#             # index to maintain the current frame
-#             curr_frame = 0
-#             for frame in frameList:
-#                 # Extract all pedestrians in current frame
-#                 pedsInFrame = data[:, data[0, :] == frame]
-#
-#                 # Extract peds list
-#                 pedsList = pedsInFrame[1, :].tolist()
-#
-#                 # Helper print statement to figure out the maximum number of peds in any frame in any dataset
-#                 # if len(pedsList) > 1:
-#                 # print len(pedsList)
-#                 # DEBUG
-#                 #    continue
-#
-#                 # Add number of peds in the current frame to the stored data
-#                 numPeds_data[dataset_index].append(len(pedsList))
-#
-#                 # Initialize the row of the numpy array
-#                 pedsWithPos = []
-#
-#                 # For each ped in the current frame
-#                 for ped in pedsList:
-#                     # Extract their x and y positions
-#                     current_x = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
-#                     current_y = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
-#                     current_scale_x = pedsInFrame[4, pedsInFrame[1, :] == ped][0]
-#                     current_scale_y = pedsInFrame[5, pedsInFrame[1, :] == ped][0]
-#
-#                     # Add their pedID, x, y to the row of the numpy array
-#                     pedsWithPos.append([ped, current_x, current_y, current_scale_x, current_scale_y, frame])
-#
-#                 # Add the details of all the peds in the current frame to all_frame_data
-#                 all_frame_data[dataset_index][curr_frame, 0:len(pedsList), :] = np.array(pedsWithPos)
-#                 # Increment the frame index
-#                 curr_frame += 1
-#             # Increment the dataset index
-#             dataset_index += 1
-#
-#         # Save the tuple (all_frame_data, frameList_data, numPeds_data) in the pickle file
-#         f = open(data_file, "wb")
-#         pickle.dump((all_frame_data, frameList_data, numPeds_data), f, protocol=2)
-#         f.close()
-#
-#     def load_preprocessed(self, data_file):
-#         '''
-#         Function to load the pre-processed data into the DataLoader object
-#         params:
-#         data_file : the path to the pickled data file
-#         '''
-#         # Load data from the pickled file
-#         f = open(data_file, 'rb')
-#         self.raw_data = pickle.load(f)
-#         f.close()
-#
-#         # Get all the data from the pickle file
-#         self.data = self.raw_data[0]
-#         self.frameList = self.raw_data[1]
-#         self.numPedsList = self.raw_data[2]
-#         counter = 0
-#
-#         # For each dataset
-#         for dataset in range(len(self.data)):
-#             # get the frame data for the current dataset
-#             all_frame_data = self.data[dataset]
-#             print(len(all_frame_data))
-#             # Increment the counter with the number of sequences in the current dataset
-#             counter += int(len(all_frame_data) / (self.seq_length + 2))
-#
-#         # Calculate the number of batches
-#         self.num_batches = int(counter / self.batch_size)
-#
-#     def next_batch(self):
-#         '''
-#         Function to get the next batch of points
-#         '''
-#         # Source data
-#         x_batch = []
-#         # Target data
-#         y_batch = []
-#         # Frame details
-#         frame_batch = []
-#         # Dataset data
-#         d = []
-#         # Iteration index
-#         i = 0
-#         while i < self.batch_size:
-#             # Extract the frame data of the current dataset
-#             frame_data = self.data[self.dataset_pointer]
-#             # Get the frame pointer for the current dataset
-#             idx = self.frame_pointer
-#             # While there is still seq_length number of frames left in the current dataset
-#             if idx + self.seq_length < frame_data.shape[0]:
-#                 # All the data in this sequence
-#                 seq_frame_data = frame_data[idx:idx + self.seq_length + 1, :]
-#                 seq_source_frame_data = frame_data[idx:idx + self.seq_length, :]
-#                 seq_target_frame_data = frame_data[idx + 1:idx + self.seq_length + 1, :]
-#                 # Number of unique peds in this sequence of frames
-#                 pedID_list = np.unique(seq_frame_data[:, :, 0])
-#                 numUniquePeds = pedID_list.shape[0]
-#
-#                 sourceData = np.zeros((self.seq_length, self.maxNumPeds, 5))
-#                 targetData = np.zeros((self.seq_length, self.maxNumPeds, 5))
-#                 frameData = np.zeros((self.seq_length, 1))
-#
-#                 # 增加stop list，检测有无中断轨迹的情况
-#                 stop_list = []
-#
-#                 for seq in range(self.seq_length):
-#                     sseq_frame_data = seq_source_frame_data[seq, :]
-#                     tseq_frame_data = seq_target_frame_data[seq, :]
-#                     for ped in range(numUniquePeds):
-#                         pedID = pedID_list[ped]
-#
-#                         if pedID == 0:
-#                             continue
-#                         else:
-#                             sped = np.squeeze(sseq_frame_data[sseq_frame_data[:, 0] == pedID, :])
-#                             tped = np.squeeze(tseq_frame_data[tseq_frame_data[:, 0] == pedID, :])
-#                             if sped.size != 0 or tped.size != 0:
-#                                 if sped.size != 0:
-#                                     sourceData[seq, ped, :] = sped[:5]
-#                                     frameData[seq, 0] = sped[5]
-#                                 if tped.size != 0:
-#                                     targetData[seq, ped, :] = tped[:5]
-#
-#                                 # 断点统计
-#                                 if sped.size != 0 and tped.size == 0:
-#                                     stop_list.append(pedID)
-#                                 # 断点检查
-#                                 if sped.size == 0 and tped.size != 0 and pedID in stop_list:
-#                                     print('[Error]:出现中途中断的轨迹')
-#
-#                 x_batch.append(sourceData)
-#                 y_batch.append(targetData)
-#                 frame_batch.append(frameData)
-#                 self.frame_pointer += self.seq_length
-#                 d.append(self.dataset_pointer)
-#                 i += 1
-#             else:
-#                 # Not enough frames left
-#                 # Increment the dataset pointer and set the frame_pointer to zero
-#                 self.tick_batch_pointer()
-#
-#         return x_batch, y_batch, frame_batch, d
-#
-#     def tick_batch_pointer(self):
-#         '''
-#         Advance the dataset pointer
-#         '''
-#         # Go to the next dataset
-#         self.dataset_pointer += 1
-#         # Set the frame pointer to zero for the current dataset
-#         self.frame_pointer = 0
-#         # If all datasets are done, then go to the first one again
-#         if self.dataset_pointer >= len(self.data):
-#             self.dataset_pointer = 0
-#
-#     def reset_batch_pointer(self):
-#         '''
-#         Reset all pointers
-#         '''
-#         # Go to the first frame of the first dataset
-#         self.dataset_pointer = 0
-#         self.frame_pointer = 0
-#
-#     def get_mot16_subname(self, index):
-#         return self.used_mot16_subname[index]
+    kitti_loader = KittiDataLoader(32, 5, 70, range(0, 21))
+    for i in range(0, len(kitti_loader)):
+        x, y, _ = kitti_loader.next_batch()
