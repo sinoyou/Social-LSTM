@@ -44,7 +44,10 @@ class KittiDataLoader():
 
     def preprocess(self):
         """
-        pre process *.txt data to list of maxtirx
+        Pre process *.txt data to list of sub-scene matrix.
+        * Here, sub-scene refers to partial sequence in a whole scene,
+          we do this because the data is raw and target objects(pedestrians + [cyclist])
+          do not appear in all the scene. Many slice (which matrix all zero) should be ignored.
         :return: list of matrix
         """
         # load data -> preprocess_files_candidate
