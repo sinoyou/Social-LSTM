@@ -6,8 +6,8 @@ import matplotlib.patches as mpatches
 import numpy as np
 import cv2
 import path_static
-from tool.plot.trajectory import Trajectory
-from tool.plot.util import get_scene_path
+from mot_tool.plot.trajectory import Trajectory
+from mot_tool.plot.util import get_scene_path
 
 
 class TrajectoryPlot:

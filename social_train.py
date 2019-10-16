@@ -6,7 +6,7 @@ import pickle
 
 import path_static
 from social_model import SocialModel
-from social_utils import SocialDataLoader
+from social_utils_mot16 import SocialDataLoader
 from grid import getSequenceGridMask
 
 

@@ -5,9 +5,9 @@ import random
 import numpy as np
 
 import path_static
-from tool.plot.trajectory import Trajectory
-from tool.plot.trajectory_plot import TrajectoryPlot
-from tool.plot.util import get_scene_path
+from mot_tool.plot.trajectory import Trajectory
+from mot_tool.plot.trajectory_plot import TrajectoryPlot
+from mot_tool.plot.util import get_scene_path
 
 
 class Plotter:
