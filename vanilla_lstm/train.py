@@ -52,7 +52,7 @@ def main():
                         help='Embedding dimension for the spatial coordinates')
     # yzn 训练和监测时将5组数据按照4:1的比例拆分，下述参数即用于指定不参加训练的数据组。
     parser.add_argument('--leaveDataset', type=int, default=1,
-                        help='The dataset index to be left out in training')
+                        help='The dataset index to be left out in train')
     args = parser.parse_args()
     train(args)
 

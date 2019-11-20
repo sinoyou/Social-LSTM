@@ -1,6 +1,6 @@
 import os
 
-from mot_tool.plot.trajectory import Trajectory
+from deprecated.mot_tool.plot.trajectory import Trajectory
 
 
 def get_scene_path(dir, trajectory: Trajectory):

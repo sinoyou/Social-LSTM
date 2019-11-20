@@ -5,7 +5,7 @@ import os
 import pickle
 import argparse
 
-from social_utils_mot16 import SocialDataLoader
+from deprecated.social_utils_mot16 import SocialDataLoader
 from social_model import SocialModel
 from grid import getSequenceGridMask
 
