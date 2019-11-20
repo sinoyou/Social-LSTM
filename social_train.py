@@ -112,7 +112,8 @@ def train(args):
             return model, saver
 
         model, saver = get_model(force=True)
-        writer = tf.summary.FileWriter(os.path.join(path_static.save_path, 'runs'), sess.graph)
+        tf.summary.merge_all()
+        tf.summary.FileWriter(os.path.join(path_static.save_path, 'runs'), sess.graph)
 
         # For each epoch
         for e in range(args.num_epochs):
@@ -173,6 +174,8 @@ def train(args):
                             model.grid_data: grid_batch}
 
                     train_loss, _ = sess.run([model.cost, model.train_op], feed)
+
+                    tf.summary.scalar('train loss', train_loss)
 
                     loss_batch += train_loss
 
