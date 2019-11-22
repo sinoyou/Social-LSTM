@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 
 
 class KittiDataLoader():
-    def __init__(self, batch_size, seq_length, max_num_peds, ignore_list, sub_set, database_dir='data\\KITTI'):
+    def __init__(self, batch_size, seq_length, max_num_peds, ignore_list, sub_set, database_dir='data/KITTI'):
         """
         DataLoader for <label> data in KITTI dataset: "multi-object tracking 2012"
         Download Addr: http://www.cvlibs.net/download.php?file=data_tracking_label_2.zip

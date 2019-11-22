@@ -10,7 +10,9 @@ from social_model import SocialModel
 from deprecated.social_utils_mot16 import SocialDataLoader
 from grid import getSequenceGridMask
 from social_utils_kitti import KittiDataLoader
-import tensorboard
+from torch.utils.tensorboard import SummaryWriter
+
+write = SummaryWriter(os.path.join(path_static.save_path, 'runs'))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -26,13 +28,13 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=64,
                         help='minibatch size')
     # Length of sequence to be considered parameter
     parser.add_argument('--seq_length', type=int, default=5,
                         help='RNN sequence length')
     # Number of epochs parameter
-    parser.add_argument('--num_epochs', type=int, default=10,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
     parser.add_argument('--save_every', type=int, default=50,
@@ -42,7 +44,7 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=10.,
                         help='clip gradients at this value')
     # Learning rate parameter
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=0.0001,
                         help='learning rate')
     # Decay rate for the learning rate parameter
     parser.add_argument('--decay_rate', type=float, default=0.95,
@@ -55,7 +57,7 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=64,
                         help='Embedding dimension for the spatial coordinates')
     # Size of neighborhood to be considered parameter
-    parser.add_argument('--neighborhood_size', type=int, default=200,
+    parser.add_argument('--neighborhood_size', type=int, default=300,
                         help='Neighborhood size to be considered for social grid')
     # Size of the social grid parameter
     parser.add_argument('--grid_size', type=int, default=2,
@@ -111,9 +113,7 @@ def train(args):
 
             return model, saver
 
-        model, saver = get_model(force=True)
-        tf.summary.merge_all()
-        tf.summary.FileWriter(os.path.join(path_static.save_path, 'runs'), sess.graph)
+        model, saver = get_model(force=False)
 
         # For each epoch
         for e in range(args.num_epochs):
@@ -149,8 +149,8 @@ def train(args):
                         use_data[:, :, 4] = data[:, :, 4] - data[:, :, 2]  # height
                         return use_data
 
-                    use_x_batch = data_filter(x_batch)
-                    use_y_batch = data_filter(y_batch)
+                    use_x_batch = data_filter(x_batch) / args.image_dim[0]
+                    use_y_batch = data_filter(y_batch) / args.image_dim[1]
 
                     grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size, args.grid_size)
 
@@ -172,13 +172,13 @@ def train(args):
                     feed = {model.input_data: use_x_rel_batch,
                             model.target_data: use_y_rel_batch,
                             model.grid_data: grid_batch}
-
+                    
                     train_loss, _ = sess.run([model.cost, model.train_op], feed)
-
-                    tf.summary.scalar('train loss', train_loss)
-
+                    
+                    write.add_scalar('train', train_loss, e * len(data_loader) + b)
+                    
                     loss_batch += train_loss
-
+                    
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
                 print(

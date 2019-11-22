@@ -1,1 +1,1 @@
-save_path = 'save-kitti-scale'
+save_path = 'save-kitti-scale-normalized'
