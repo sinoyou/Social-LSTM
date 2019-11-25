@@ -14,6 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 write = SummaryWriter(os.path.join(path_static.save_path, 'runs'))
 
+
 def main():
     parser = argparse.ArgumentParser()
     # RNN size parameter (dimension of the output/hidden state)
@@ -31,7 +32,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=64,
                         help='minibatch size')
     # Length of sequence to be considered parameter
-    parser.add_argument('--seq_length', type=int, default=5,
+    parser.add_argument('--seq_length', type=int, default=10,
                         help='RNN sequence length')
     # Number of epochs parameter
     parser.add_argument('--num_epochs', type=int, default=30,
@@ -44,7 +45,7 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=10.,
                         help='clip gradients at this value')
     # Learning rate parameter
-    parser.add_argument('--learning_rate', type=float, default=0.0001,
+    parser.add_argument('--learning_rate', type=float, default=0.001,
                         help='learning rate')
     # Decay rate for the learning rate parameter
     parser.add_argument('--decay_rate', type=float, default=0.95,
@@ -54,10 +55,10 @@ def main():
     parser.add_argument('--keep_prob', type=float, default=0.8,
                         help='dropout keep probability')
     # Dimension of the embeddings parameter
-    parser.add_argument('--embedding_size', type=int, default=64,
+    parser.add_argument('--embedding_size', type=int, default=128,
                         help='Embedding dimension for the spatial coordinates')
     # Size of neighborhood to be considered parameter
-    parser.add_argument('--neighborhood_size', type=int, default=300,
+    parser.add_argument('--neighborhood_size', type=int, default=200,
                         help='Neighborhood size to be considered for social grid')
     # Size of the social grid parameter
     parser.add_argument('--grid_size', type=int, default=2,
@@ -68,15 +69,20 @@ def main():
     # Image info
     parser.add_argument('--image_dim', type=tuple, default=(1392, 512),
                         help='image width and height for social pooling')
+    # Save place
+    parser.add_argument('--save_dir', type=str, help='directory of saving ckpt, log and config.')
+    # Visible Device
+    parser.add_argument('--device', type=str, default='0', help='GPU device num')
     args = parser.parse_args()
     train(args)
 
 
 def train(args):
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     # Create the SocialDataLoader object
     data_loader = KittiDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, ignore_list=[], sub_set='train')
 
-    savepath = path_static.save_path
+    savepath = args.save_dir
     # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
     if os.path.exists(savepath):
         print("[WARNING]: Save Path Already Exists. Do you want to continue ? ")
@@ -143,15 +149,14 @@ def train(args):
                         use_shape = (data.shape[0], data.shape[1], 5)
                         use_data = np.zeros(use_shape)
                         use_data[:, :, 0] = data[:, :, 0]
-                        use_data[:, :, 1] = (data[:, :, 1] + data[:, :, 3]) / 2 / args.image_dim[0]  # x
-                        use_data[:, :, 2] = (data[:, :, 2] + data[:, :, 4]) / 2 / args.image_dim[1] # y
-                        use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1]) / args.image_dim[0]  # width
-                        use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2]) / args.image_dim[1] # height
+                        use_data[:, :, 1] = (data[:, :, 1] + data[:, :, 3]) / 2  # x
+                        use_data[:, :, 2] = (data[:, :, 2] + data[:, :, 4]) / 2  # y
+                        use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1])  # width
+                        use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2])  # height
                         return use_data
 
-                    use_x_batch = data_filter(x_batch) 
+                    use_x_batch = data_filter(x_batch)
                     use_y_batch = data_filter(y_batch)
-                    
 
                     grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size, args.grid_size)
 
@@ -173,13 +178,13 @@ def train(args):
                     feed = {model.input_data: use_x_rel_batch,
                             model.target_data: use_y_rel_batch,
                             model.grid_data: grid_batch}
-                    
+
                     train_loss, _ = sess.run([model.cost, model.train_op], feed)
-                    
+
                     write.add_scalar('train', train_loss, e * len(data_loader) + b)
-                    
+
                     loss_batch += train_loss
-                    
+
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
                 print(

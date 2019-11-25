@@ -7,24 +7,22 @@ Date : 29th October 2016
 import numpy as np
 
 
-def getGridMask(frame, dimensions, neighborhood_size, grid_size):
+def getGridMask(frame, neighborhood_size, grid_size):
     '''
     This function computes the binary mask that represents the
     occupancy of each ped in the other's grid
     params:
     frame : This will be a MNP x 5 matrix with each row being [pedID, x, y, scale-x, scale-y]
-    dimensions : This will be a list [width, height]
     neighborhood_size : Scalar value representing the size of neighborhood considered
     grid_size : Scalar value representing the size of the grid discretization
     '''
 
     # Maximum number of pedestrians
     mnp = frame.shape[0]
-    width, height = dimensions[0], dimensions[1]
-
     frame_mask = np.zeros((mnp, mnp, grid_size ** 2))
 
-    width_bound, height_bound = neighborhood_size / (width * 1.0), neighborhood_size / (height * 1.0)
+    # width_bound, height_bound = neighborhood_size / (width * 1.0), neighborhood_size / (height * 1.0)
+    width_bound, height_bound = neighborhood_size, neighborhood_size
 
     # For each ped in the frame (existent and non-existent)
     for pedindex in range(mnp):
@@ -69,12 +67,11 @@ def getGridMask(frame, dimensions, neighborhood_size, grid_size):
     return frame_mask
 
 
-def getSequenceGridMask(sequence, dimensions, neighborhood_size, grid_size):
+def getSequenceGridMask(sequence, neighborhood_size, grid_size):
     '''
     Get the grid masks for all the frames in the sequence
     params:
     sequence : A numpy matrix of shape SL x MNP x 5
-    dimensions : This will be a list [width, height]
     neighborhood_size : Scalar value representing the size of neighborhood considered
     grid_size : Scalar value representing the size of the grid discretization
     '''
@@ -88,6 +85,6 @@ def getSequenceGridMask(sequence, dimensions, neighborhood_size, grid_size):
     sequence_mask = np.zeros((sl, mnp, mnp, grid_size ** 2))
 
     for i in range(sl):
-        sequence_mask[i, :, :, :] = getGridMask(sequence[i, :, :], dimensions, neighborhood_size, grid_size)
+        sequence_mask[i, :, :, :] = getGridMask(sequence[i, :, :], neighborhood_size, grid_size)
 
     return sequence_mask
