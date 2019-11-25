@@ -12,13 +12,11 @@ from social_model import SocialModel
 from deprecated.social_utils_mot16 import SocialDataLoader
 from grid import getSequenceGridMask
 from social_utils_kitti import KittiDataLoader
-from torch.utils.tensorboard import SummaryWriter
-
-write = SummaryWriter(os.path.join(path_static.save_path, 'runs'))
 
 FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)
 logger = logging.getLogger(__name__)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -102,6 +100,8 @@ def train(args):
 
     # Initialize a TensorFlow session
     with tf.Session() as sess:
+        writer = tf.summary.FileWriter(logdir=os.path.join(args.save_dir, 'runs'), graph=sess.graph)
+
         # 模型初始化或预加载
         def get_model(force):
             if not force and os.path.exists(os.path.join(savepath, 'social_config.pkl')):
@@ -185,9 +185,9 @@ def train(args):
                             model.target_data: use_y_rel_batch,
                             model.grid_data: grid_batch}
 
-                    train_loss, _ = sess.run([model.cost, model.train_op], feed)
+                    train_loss, _, summary= sess.run([model.cost, model.train_op, model.merge], feed)
 
-                    write.add_scalar('train', train_loss, e * len(data_loader) + b)
+                    writer.add_summary(summary=summary, global_step=e * len(data_loader) + b)
 
                     loss_batch += train_loss
 

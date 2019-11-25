@@ -197,6 +197,7 @@ class SocialModel():
         with tf.name_scope("mean_cost"):
             # Mean of the cost
             self.cost = tf.div(self.cost, self.counter)
+            tf.summary.scalar('train loss', self.cost)
 
         # Get all trainable variables
         tvars = tf.trainable_variables()
@@ -218,6 +219,8 @@ class SocialModel():
 
         # The train operator
         self.train_op = optimizer.apply_gradients(zip(grads, tvars))
+
+        self.merge = tf.summary.merge_all()
 
         # Merge all summmaries
         # merged_summary_op = tf.merge_all_summaries()
