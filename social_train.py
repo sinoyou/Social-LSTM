@@ -142,15 +142,15 @@ def train(args):
                 # For each sequence in the batch
                 for batch in range(data_loader.batch_size):
                     # x, y: batch_size x seq_length x maxNumPeds x 11
-                    # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
+                    # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 5
                     x_batch, y_batch = x[batch], y[batch]
 
                     def data_filter(data):
                         use_shape = (data.shape[0], data.shape[1], 5)
                         use_data = np.zeros(use_shape)
                         use_data[:, :, 0] = data[:, :, 0]
-                        use_data[:, :, 1] = (data[:, :, 1] + data[:, :, 3]) / 2  # x
-                        use_data[:, :, 2] = (data[:, :, 2] + data[:, :, 4]) / 2  # y
+                        use_data[:, :, 1] = data[:, :, 8]  # original x -> x
+                        use_data[:, :, 2] = data[:, :, 10]  # original z -> y
                         use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1])  # width
                         use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2])  # height
                         return use_data
@@ -158,7 +158,7 @@ def train(args):
                     use_x_batch = data_filter(x_batch)
                     use_y_batch = data_filter(y_batch)
 
-                    grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size, args.grid_size)
+                    grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size)
 
                     # Feed the source, target data
                     # use_x_batch -> use_x_relative_batch
