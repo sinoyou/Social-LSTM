@@ -113,7 +113,7 @@ def train(args):
 
             return model, saver
 
-        model, saver = get_model(force=False)
+        model, saver = get_model(force=True)
 
         # For each epoch
         for e in range(args.num_epochs):
@@ -143,14 +143,15 @@ def train(args):
                         use_shape = (data.shape[0], data.shape[1], 5)
                         use_data = np.zeros(use_shape)
                         use_data[:, :, 0] = data[:, :, 0]
-                        use_data[:, :, 1] = (data[:, :, 1] + data[:, :, 3]) / 2  # x
-                        use_data[:, :, 2] = (data[:, :, 2] + data[:, :, 4]) / 2  # y
-                        use_data[:, :, 3] = data[:, :, 3] - data[:, :, 1]  # width
-                        use_data[:, :, 4] = data[:, :, 4] - data[:, :, 2]  # height
+                        use_data[:, :, 1] = (data[:, :, 1] + data[:, :, 3]) / 2 / args.image_dim[0]  # x
+                        use_data[:, :, 2] = (data[:, :, 2] + data[:, :, 4]) / 2 / args.image_dim[1] # y
+                        use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1]) / args.image_dim[0]  # width
+                        use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2]) / args.image_dim[1] # height
                         return use_data
 
-                    use_x_batch = data_filter(x_batch) / args.image_dim[0]
-                    use_y_batch = data_filter(y_batch) / args.image_dim[1]
+                    use_x_batch = data_filter(x_batch) 
+                    use_y_batch = data_filter(y_batch)
+                    
 
                     grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size, args.grid_size)
 
