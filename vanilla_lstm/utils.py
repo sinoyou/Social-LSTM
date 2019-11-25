@@ -18,13 +18,13 @@ class DataLoader():
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
         #                  './data/ucy/zara/zara01', './data/ucy/zara/zara02',
         #                  './data/ucy/univ']
-        self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
+        self.data_dirs = ['../data/eth/univ', '../data/eth/hotel']
 
         self.used_data_dirs = [self.data_dirs[x] for x in datasets]
 
         # Data directory where the pre-processed pickle file resides
-        # yzn pickle：腌制
-        self.data_dir = './data'
+        # yzn pickle：
+        self.data_dir = '../data'
 
         # Store the batch size and the sequence length arguments
         self.batch_size = batch_size

@@ -11,7 +11,7 @@ from vanilla_lstm.utils import DataLoader
 def main():
     parser = argparse.ArgumentParser()
     # RNN size parameter (dimension of the output/hidden state)
-    parser.add_argument('--rnn_size', type=int, default=128,
+    parser.add_argument('--rnn_size', type=int, default=256,
                         help='size of RNN hidden state')
     # Number of layers parameter
     # TODO: (improve) Number of layers not used. Only a single layer implemented
@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--seq_length', type=int, default=10,
                         help='RNN sequence length')
     # Number of epochs parameter
-    parser.add_argument('--num_epochs', type=int, default=100,
+    parser.add_argument('--num_epochs', type=int, default=300,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
     parser.add_argument('--save_every', type=int, default=500,
@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--keep_prob', type=float, default=0.8,
                         help='dropout keep probability')
     # Dimension of the embeddings parameter
-    parser.add_argument('--embedding_size', type=int, default=128,
+    parser.add_argument('--embedding_size', type=int, default=256,
                         help='Embedding dimension for the spatial coordinates')
     # yzn 训练和监测时将5组数据按照4:1的比例拆分，下述参数即用于指定不参加训练的数据组。
     parser.add_argument('--leaveDataset', type=int, default=1,
@@ -67,7 +67,7 @@ def train(args):
     data_loader = DataLoader(args.batch_size, args.seq_length, datasets, forcePreProcess=True)
 
     # Save the arguments int the config file
-    with open(os.path.join('save', 'config.pkl'), 'wb') as f:
+    with open(os.path.join('..', 'save', 'config.pkl'), 'wb') as f:
         pickle.dump(args, f)
 
     # Create a Vanilla LSTM model with the arguments

@@ -51,7 +51,7 @@ def main():
     sample_args = parser.parse_args()
 
     # Load the saved arguments to the model from the config file
-    with open(os.path.join('save', 'config.pkl'), 'rb') as f:
+    with open(os.path.join('..', 'save', 'config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
 
     # Initialize with the saved args
