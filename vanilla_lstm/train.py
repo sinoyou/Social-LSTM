@@ -3,10 +3,15 @@ import argparse
 import os
 import time
 import pickle
+import logging
+import sys
 
 from vanilla_lstm.model import Model
 from vanilla_lstm.utils import DataLoader
 
+FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
+logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)
+logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -54,6 +59,7 @@ def main():
     parser.add_argument('--leaveDataset', type=int, default=1,
                         help='The dataset index to be left out in train')
     args = parser.parse_args()
+    logger.info(args)
     train(args)
 
 

@@ -4,6 +4,7 @@ import os
 import time
 import pickle
 import numpy as np
+import logging
 
 import path_static
 from social_model import SocialModel
@@ -12,8 +13,11 @@ from grid import getSequenceGridMask
 from social_utils_kitti import KittiDataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-write = SummaryWriter(os.path.join(path_static.save_path, 'runs'))
+FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
+logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)
+logger = logging.getLogger(__name__)
 
+write = SummaryWriter(os.path.join(path_static.save_path, 'runs'))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -74,10 +78,12 @@ def main():
     # Visible Device
     parser.add_argument('--device', type=str, default='0', help='GPU device num')
     args = parser.parse_args()
+    logger.info(args)
     train(args)
 
 
 def train(args):
+
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
     # Create the SocialDataLoader object
     data_loader = KittiDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, ignore_list=[], sub_set='train')
@@ -104,7 +110,7 @@ def train(args):
                 model = SocialModel(save_args)
                 # Restore variables from checkpoint
                 ckpt = tf.train.get_checkpoint_state(savepath)
-                print('loading model: ', ckpt.model_checkpoint_path)
+                logger.info('loading model: ', ckpt.model_checkpoint_path)
                 saver = tf.train.Saver()
                 saver.restore(sess, save_path=ckpt.model_checkpoint_path)
             else:
@@ -187,7 +193,7 @@ def train(args):
 
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
-                print(
+                logger.info(
                     "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
                         .format(
                         e * len(data_loader) + b,
@@ -200,7 +206,7 @@ def train(args):
                     checkpoint_path = os.path.join(savepath, 'social_model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * len(data_loader) + b,
                                write_meta_graph=False)
-                    print("model saved to {}".format(checkpoint_path))
+                    logger.info("model saved to {}".format(checkpoint_path))
 
 
 if __name__ == '__main__':
