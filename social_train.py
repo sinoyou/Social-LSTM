@@ -164,7 +164,7 @@ def train(args):
                     use_x_batch = data_filter(x_batch)
                     use_y_batch = data_filter(y_batch)
 
-                    grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size)
+                    grid_batch = getSequenceGridMask(x_batch, args.neighborhood_size, args.grid_size)
 
                     # Feed the source, target data
                     # use_x_batch -> use_x_relative_batch
