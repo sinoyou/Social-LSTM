@@ -76,6 +76,9 @@ def main():
     parser.add_argument('--save_dir', type=str, help='directory of saving ckpt, log and config.')
     # Visible Device
     parser.add_argument('--device', type=str, default='0', help='GPU device num')
+    # Use relative path
+    parser.add_argument('--relative_path', type=bool, default=True,
+                        help='Use relative path as obs and pred, default True')
     args = parser.parse_args()
     logger.info(args)
     train(args)
@@ -181,8 +184,15 @@ def train(args):
                     use_x_rel_batch = abs_to_def(use_x_batch)  # id, rel_x, rel_y, width, height
                     use_y_rel_batch = abs_to_def(use_y_batch)
 
-                    feed = {model.input_data: use_x_rel_batch,
-                            model.target_data: use_y_rel_batch,
+                    if args.relative_path:
+                        input_data = use_x_rel_batch
+                        target_data = use_x_rel_batch
+                    else:
+                        input_data = use_x_batch
+                        target_data = use_y_batch
+
+                    feed = {model.input_data: input_data,
+                            model.target_data: target_data,
                             model.grid_data: grid_batch}
 
                     train_loss, _, summary = sess.run([model.cost, model.train_op, model.merge], feed)
