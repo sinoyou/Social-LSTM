@@ -197,7 +197,7 @@ class SocialModel():
         with tf.name_scope("mean_cost"):
             # Mean of the cost
             self.cost = tf.div(self.cost, self.counter)
-            tf.summary.scalar('train loss', self.cost)
+            tf.summary.scalar('train_loss', self.cost)
 
         # Get all trainable variables
         tvars = tf.trainable_variables()

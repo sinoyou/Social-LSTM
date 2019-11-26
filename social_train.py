@@ -164,7 +164,7 @@ def train(args):
                     use_x_batch = data_filter(x_batch)
                     use_y_batch = data_filter(y_batch)
 
-                    grid_batch = getSequenceGridMask(x_batch, args.image_dim, args.neighborhood_size)
+                    grid_batch = getSequenceGridMask(x_batch, args.neighborhood_size, args.grid_size)
 
                     # Feed the source, target data
                     # use_x_batch -> use_x_relative_batch
@@ -185,7 +185,7 @@ def train(args):
                             model.target_data: use_y_rel_batch,
                             model.grid_data: grid_batch}
 
-                    train_loss, _, summary= sess.run([model.cost, model.train_op, model.merge], feed)
+                    train_loss, _, summary = sess.run([model.cost, model.train_op, model.merge], feed)
 
                     writer.add_summary(summary=summary, global_step=e * len(data_loader) + b)
 
