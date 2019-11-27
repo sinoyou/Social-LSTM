@@ -153,7 +153,7 @@ def evaluate(model, sess, sample_args, saved_args):
         def rel_to_abs(x):
             result = np.zeros_like(x)
             for i in range(1, result.shape[0]):
-                result[i, :] = result[i - 1, :] + x[i:, ]
+                result[i, :] = result[i - 1, :] + x[i, :]
             return result
 
         if saved_args.relative_path:
