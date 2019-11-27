@@ -150,10 +150,25 @@ def evaluate(model, sess, sample_args, saved_args):
 
         complete_traj = model.sample(sess, obs_traj, obs_grid, input_x, sample_args.pred_length)
 
+        def rel_to_abs(x):
+            result = np.zeros_like(x)
+            for i in range(1, result.shape[0]):
+                result[i, :] = result[i - 1, :] + x[i:, ]
+            return result
+
+        if saved_args.relative_path:
+            cmp_pred = rel_to_abs(complete_traj)
+            cmp_true = rel_to_abs(input_x)
+        else:
+            cmp_pred = complete_traj
+            cmp_true = input_x
+
         # ipdb.set_trace()
         # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
-        mean_error = get_mean_error(complete_traj, input_x, sample_args.obs_length, saved_args.maxNumPeds)
-        final_error = get_final_error(complete_traj, input_y, sample_args.obs_length, saved_args.maxNumPeds)
+        mean_error = get_mean_error(cmp_pred, cmp_true, sample_args.obs_length,
+                                    saved_args.maxNumPeds)
+        final_error = get_final_error(cmp_pred, cmp_true, sample_args.obs_length,
+                                      saved_args.maxNumPeds)
         total_mean_error += mean_error
         total_final_error += final_error
 
@@ -199,7 +214,6 @@ def main():
 
     # Dataset to get data from
     evaluate(model, sess, sample_args, saved_args)
-
 
 
 if __name__ == '__main__':
