@@ -131,8 +131,8 @@ def evaluate(model, sess, sample_args, saved_args):
         # Batch size is 1
         x_batch, y_batch = x[0], y[0]
 
-        x_rel_batch, x_batch = data_filter_location_and_bb(x_batch)
-        y_rel_batch, y_batch = data_filter_location_and_bb(y_batch)
+        x_batch, x_rel_batch = data_filter_location_and_bb(x_batch)
+        y_batch, y_rel_batch = data_filter_location_and_bb(y_batch)
 
         grid_batch = getSequenceGridMask(x_batch, saved_args.neighborhood_size, saved_args.grid_size)
 
