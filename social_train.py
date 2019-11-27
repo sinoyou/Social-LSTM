@@ -11,7 +11,7 @@ import path_static
 from social_model import SocialModel
 from deprecated.social_utils_mot16 import SocialDataLoader
 from grid import getSequenceGridMask
-from social_utils_kitti import KittiDataLoader
+from social_utils_kitti import KittiDataLoader, data_filter_location_and_bb
 
 FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)
@@ -154,42 +154,17 @@ def train(args):
                     # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 5
                     x_batch, y_batch = x[batch], y[batch]
 
-                    def data_filter(data):
-                        use_shape = (data.shape[0], data.shape[1], 5)
-                        use_data = np.zeros(use_shape)
-                        use_data[:, :, 0] = data[:, :, 0]
-                        use_data[:, :, 1] = data[:, :, 8]  # original x -> x
-                        use_data[:, :, 2] = data[:, :, 10]  # original z -> y
-                        use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1])  # width
-                        use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2])  # height
-                        return use_data
+                    x_batch_filter, x_rel_batch_filter = data_filter_location_and_bb(x_batch)
+                    y_batch_filter, y_rel_batch_filter = data_filter_location_and_bb(y_batch)
 
-                    use_x_batch = data_filter(x_batch)
-                    use_y_batch = data_filter(y_batch)
-
-                    grid_batch = getSequenceGridMask(x_batch, args.neighborhood_size, args.grid_size)
-
-                    # Feed the source, target data
-                    # use_x_batch -> use_x_relative_batch
-                    # use_y_bacth -> use_y_relative_bacth
-                    def abs_to_def(data):
-                        result = np.zeros_like(data)
-                        result[:, :, 0] = data[:, :, 0]  # id
-                        result[:, :, 3:5] = data[:, :, 3:5]  # width, height
-                        result[0, :, 1:3] = 0  # rel start
-                        for i in range(1, data.shape[0]):
-                            result[i, :, 1:3] = data[i, :, 1:3] - data[i - 1, :, 1:3]
-                        return result
-
-                    use_x_rel_batch = abs_to_def(use_x_batch)  # id, rel_x, rel_y, width, height
-                    use_y_rel_batch = abs_to_def(use_y_batch)
+                    grid_batch = getSequenceGridMask(x_batch_filter, args.neighborhood_size, args.grid_size)
 
                     if args.relative_path:
-                        input_data = use_x_rel_batch
-                        target_data = use_x_rel_batch
+                        input_data = x_batch_filter
+                        target_data = y_batch_filter
                     else:
-                        input_data = use_x_batch
-                        target_data = use_y_batch
+                        input_data = x_rel_batch_filter
+                        target_data = y_rel_batch_filter
 
                     feed = {model.input_data: input_data,
                             model.target_data: target_data,
