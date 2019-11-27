@@ -5,8 +5,9 @@ import os
 import pickle
 import argparse
 
-from vanilla_lstm.utils import DataLoader
-from vanilla_lstm.model import Model
+from utils import DataLoader
+from model import Model
+from kitti_utils import KittiDataLoader
 
 
 def get_mean_error(predicted_traj, true_traj, observed_length):
@@ -46,12 +47,17 @@ def main():
     # Test dataset
     parser.add_argument('--test_dataset', type=int, default=1,
                         help='Dataset to be tested on')
+    # 是否采用相对型作为输入
+    parser.add_argument('--relative_path', type=bool, default=True,
+                        help='Use relative path as obs and pred, default True')
+    # save path
+    parser.add_argument('--save_path', type=str, default='vanilla-lstm-save')
 
     # Read the arguments
     sample_args = parser.parse_args()
 
     # Load the saved arguments to the model from the config file
-    with open(os.path.join('..', 'save', 'config.pkl'), 'rb') as f:
+    with open(os.path.join(sample_args.save_path, 'config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
 
     # Initialize with the saved args
@@ -63,7 +69,7 @@ def main():
     saver = tf.train.Saver()
 
     # Get the checkpoint state to load the model from
-    ckpt = tf.train.get_checkpoint_state('save')
+    ckpt = tf.train.get_checkpoint_state(sample_args.save_path)
     print('loading model: ', ckpt.model_checkpoint_path)
 
     # Restore the model at the checpoint
@@ -74,29 +80,32 @@ def main():
 
     # Initialize the dataloader object to
     # Get sequences of length obs_length+pred_length
-    data_loader = DataLoader(1, sample_args.pred_length + sample_args.obs_length, dataset, True)
+    # data_loader = DataLoader(1, sample_args.pred_length + sample_args.obs_length, dataset, True)
+    data_loader = KittiDataLoader(1, sample_args.pred_length + sample_args.obs_length, [], sub_set='train')
 
     # Reset the data pointers of the data loader object
-    data_loader.reset_batch_pointer()
+    data_loader.reset_ptr()
 
     # Maintain the total_error until now
     total_error = 0.
-    counter = 0.
-    for b in range(data_loader.num_batches):
+    counter = 0
+    for b in range(len(data_loader)):
+        counter += 1
         # Get the source, target data for the next batch
         x, y = data_loader.next_batch()
 
         # The observed part of the trajectory
-        obs_traj = x[0][:sample_args.obs_length]
+        obs_traj = x[0][:sample_args.obs_length, [8, 10, 2, 3]]
         # Get the complete trajectory with both the observed and the predicted part from the model
         complete_traj = model.sample(sess, obs_traj, num=sample_args.pred_length)
 
         # Compute the mean error between the predicted part and the true trajectory
-        total_error += get_mean_error(complete_traj, x[0], sample_args.obs_length)
-        print("Processed trajectory number : ", b, "out of ", data_loader.num_batches, " trajectories")
+        total_error += get_mean_error(complete_traj, x[0][:, [0, 1]], sample_args.obs_length)
+        print("Processed trajectory number : ", b, "out of ", len(data_loader), " trajectories", 'mean_error',
+              total_error / counter)
 
     # Print the mean error across all the batches
-    print("Total mean error of the model is ", total_error / data_loader.num_batches)
+    print("Total mean error of the model is ", total_error / len(data_loader))
 
 
 if __name__ == '__main__':

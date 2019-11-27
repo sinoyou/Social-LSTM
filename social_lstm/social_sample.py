@@ -6,10 +6,9 @@ import pickle
 import argparse
 
 from deprecated.social_utils_mot16 import SocialDataLoader
-from social_model import SocialModel
-from grid import getSequenceGridMask
+from social_lstm.social_model import SocialModel
+from social_lstm.grid import getSequenceGridMask
 
-import path_static
 
 
 # from social_train import getSocialGrid, getSocialTensor

@@ -7,11 +7,9 @@ import numpy as np
 import logging
 import sys
 
-import path_static
-from social_model import SocialModel
-from deprecated.social_utils_mot16 import SocialDataLoader
-from grid import getSequenceGridMask
-from social_utils_kitti import KittiDataLoader
+from social_lstm.social_model import SocialModel
+from social_lstm.grid import getSequenceGridMask
+from social_lstm.social_utils_kitti import KittiDataLoader
 
 FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)

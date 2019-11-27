@@ -16,6 +16,12 @@ from tensorflow.python.ops import rnn_cell
 class Model():
 
     def __init__(self, args, infer=False):
+
+        # yzn 固定行人，固定时刻，信息量的维度，前两维必须为x和y.
+        input_size = 4
+        # Output size is the set of parameters (mu, sigma, corr)
+        output_size = 5  # 2 mu, 2 sigma and 1 corr
+
         '''
         Initialisation function for the class Model.
         Params:
@@ -45,9 +51,9 @@ class Model():
 
         # TODO: (resolve) Do we need to use a fixed seq_length?
         # Input data contains sequence of (x,y) points
-        self.input_data = tf.placeholder(tf.float32, [None, args.seq_length, 2])
+        self.input_data = tf.placeholder(tf.float32, [None, args.seq_length, input_size])
         # target data contains sequences of (x,y) points as well
-        self.target_data = tf.placeholder(tf.float32, [None, args.seq_length, 2])
+        self.target_data = tf.placeholder(tf.float32, [None, args.seq_length, input_size])
 
         # Learning rate
         self.lr = tf.Variable(args.learning_rate, trainable=False, name="learning_rate")
@@ -55,28 +61,22 @@ class Model():
         # Initial cell state of the LSTM (initialised with zeros)
         self.initial_state = cell.zero_state(batch_size=args.batch_size, dtype=tf.float32)
 
-        # Output size is the set of parameters (mu, sigma, corr)
-        output_size = 5  # 2 mu, 2 sigma and 1 corr
-
         # Embedding for the spatial coordinates
         # yzn 嵌入降维，w和b用于降维数据，同时又凸显出原本数据之间的差异。默认将2维变化为128维
         with tf.variable_scope("coordinate_embedding"):
             #  The spatial embedding using a ReLU layer
             #  Embed the 2D coordinates into embedding_size dimensions
             #  TODO: (improve) For now assume embedding_size = rnn_size
-            embedding_w = tf.get_variable("embedding_w", [2, args.embedding_size])
+            embedding_w = tf.get_variable("embedding_w", [input_size, args.embedding_size])
             embedding_b = tf.get_variable("embedding_b", [args.embedding_size])
 
         # Output linear layer
         with tf.variable_scope("rnnlm"):
-            output_w = tf.get_variable("output_w", [args.rnn_size, output_size],
-                                       initializer=tf.truncated_normal_initializer(stddev=0.01), trainable=True)
-            output_b = tf.get_variable("output_b", [output_size], initializer=tf.constant_initializer(0.01),
-                                       trainable=True)
+            output_w = tf.get_variable("output_w", [args.rnn_size, output_size])
+            output_b = tf.get_variable("output_b", [output_size])
 
         # Split inputs according to sequences.
         # yzn split函数的作用：将张量将指定的维度，拆分成数量为第二个参数的子张量，需要满足整除关系。
-        # inputs = tf.split(1, args.seq_length, self.input_data)
         inputs = tf.split(self.input_data, args.seq_length, axis=1)
         # Get a list of 2D tensors. Each of size numPoints x 2
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
@@ -102,7 +102,7 @@ class Model():
         # Concatenate the outputs from the RNN decoder and reshape it to ?xargs.rnn_size
         # yzn 在维度1上，将outputs中的所有矩阵([batch_size, rnn_size])拼接起来，形成一个总的rnn -> (reshape) ->
         # [batch_size * seq_length, rnn_size]
-        output = tf.reshape(tf.concat(outputs, 1), [-1, args.rnn_size])
+        output = tf.reshape(tf.stack(outputs, 1), [-1, args.rnn_size])
 
         # Apply the output linear layer
         # yzn 将rnn输出的结果转化成[seq_length * batch_size][5]的结构，5列数据分别代表5中空间表示数据（用于数据驱动）
@@ -111,10 +111,11 @@ class Model():
         self.final_state = last_state
 
         # reshape target data so that it aligns with predictions -> [batch_size * seq_length][2]
-        flat_target_data = tf.reshape(self.target_data, [-1, 2])
+        flat_target_data = tf.reshape(self.target_data, [-1, input_size])
         # Extract the x-coordinates and y-coordinates from the target data
         # [x_data, y_data] = tf.split(1, 2, flat_target_data)
-        [x_data, y_data] = tf.split(flat_target_data, 2, axis=1)
+        flat_target_data_list = tf.split(flat_target_data, input_size, axis=1)
+        [x_data, y_data] = [flat_target_data_list[0], flat_target_data[1]]
 
         def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
             '''
@@ -282,9 +283,11 @@ class Model():
         # Iterate over all the positions seen in the trajectory
         for pos in traj[:-1]:
             # Create the input data tensor
-            data = np.zeros((1, 1, 2), dtype=np.float32)
+            data = np.zeros((1, 1, 4), dtype=np.float32)
             data[0, 0, 0] = pos[0]  # x
             data[0, 0, 1] = pos[1]  # y
+            data[0, 0, 2] = pos[2]  # y
+            data[0, 0, 3] = pos[3]  # y
 
             # Create the feed dict
             # yzn feed_dic 允许调用者覆盖图中的张量的值，可以是placeHolder、Tensor等等
@@ -292,15 +295,17 @@ class Model():
             # Get the final state after processing the current position
             [state] = sess.run([self.final_state], feed)
 
-        ret = traj
+        ret = traj[:, [0, 1]]
 
         # Last position in the observed trajectory
         last_pos = traj[-1]
 
         # Construct the input data tensor for the last point
-        prev_data = np.zeros((1, 1, 2), dtype=np.float32)
+        prev_data = np.zeros((1, 1, 4), dtype=np.float32)
         prev_data[0, 0, 0] = last_pos[0]  # x
         prev_data[0, 0, 1] = last_pos[1]  # y
+        prev_data[0, 0, 2] = last_pos[2]  # y
+        prev_data[0, 0, 3] = last_pos[3]  # y
 
         for t in range(num):
             # Create the feed dict
@@ -310,7 +315,7 @@ class Model():
             [o_mux, o_muy, o_sx, o_sy, o_corr, state] = sess.run(
                 [self.mux, self.muy, self.sx, self.sy, self.corr, self.final_state], feed)
 
-            # Sample the next point from the distribution
+            # Sample thint fe next porom the distribution
             next_x, next_y = sample_gaussian_2d(o_mux[0][0], o_muy[0][0], o_sx[0][0], o_sy[0][0], o_corr[0][0])
             # Append the new point to the trajectory
             ret = np.vstack((ret, [next_x, next_y]))

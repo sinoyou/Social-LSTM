@@ -9,7 +9,7 @@ Date: 17th October 2016
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import rnn_cell
-from grid import getSequenceGridMask
+from social_lstm.grid import getSequenceGridMask
 
 
 class SocialModel():
