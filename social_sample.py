@@ -4,6 +4,7 @@ import tensorflow as tf
 import os
 import pickle
 import argparse
+import json
 
 from deprecated.social_utils_mot16 import SocialDataLoader
 from social_model import SocialModel
@@ -123,10 +124,13 @@ def evaluate(model, sess, sample_args, saved_args):
     # Variable to maintain total error
     total_mean_error = 0
     total_final_error = 0
+
+    json_result = []
+
     # For each batch
     for b in range(len(data_loader)):
         # Get the source, target and dataset data for the next batch
-        x, y, _ = data_loader.next_batch()
+        x, y, appendix = data_loader.next_batch()
 
         # Batch size is 1
         x_batch, y_batch = x[0], y[0]
@@ -165,6 +169,9 @@ def evaluate(model, sess, sample_args, saved_args):
 
         # ipdb.set_trace()
         # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
+
+        json_result.append((cmp_true, cmp_pred, appendix[0]))
+
         mean_error = get_mean_error(cmp_pred, cmp_true, sample_args.obs_length,
                                     saved_args.maxNumPeds)
         final_error = get_final_error(cmp_pred, cmp_true, sample_args.obs_length,
@@ -178,6 +185,8 @@ def evaluate(model, sess, sample_args, saved_args):
     # Print the mean error across all the batches
     print("Total mean error of the model is ", total_mean_error / len(data_loader))
     print("Total final error of the model is ", total_final_error / len(data_loader))
+
+    return json_result
 
 
 def main():
@@ -213,7 +222,10 @@ def main():
     saver.restore(sess, ckpt.model_checkpoint_path)
 
     # Dataset to get data from
-    evaluate(model, sess, sample_args, saved_args)
+    json_result = evaluate(model, sess, sample_args, saved_args)
+
+    with open(os.path.join(sample_args.save_path, 'traj.json'), 'r') as f:
+        f.write(json.dumps(json_result))
 
 
 if __name__ == '__main__':
