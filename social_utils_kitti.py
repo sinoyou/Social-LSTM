@@ -180,6 +180,16 @@ class KittiDataLoader():
 # 随机打印这个batch_slice中一个有有效轨迹行人的BB框，验证数据的正确性
 def print_for_valid(batch_slice):
     # plt.plot([1, 2, 3], [1, 2, 3])
+    # trajectory
+    plt.subplot(1, 2, 1)
+    for ped in range(0, batch_slice.shape[1]):
+        ped_traj = np.squeeze(batch_slice[:, ped, :])  # seq_length, 11
+        if np.sum(ped_traj) != 0:
+            plt.plot(ped_traj[:, 8], ped_traj[:, 10])
+            break
+
+    # BB
+    plt.subplot(1, 2, 2)
     plt.axis([0, 1512, 0, 600])
     for ped in range(0, batch_slice.shape[1]):
         ped_traj = np.squeeze(batch_slice[:, ped, :])  # seq_length, 11
@@ -201,6 +211,7 @@ def data_filter_location_and_bb(x):
     :param x:
     :return:
     """
+
     def data_filter(data):
         use_shape = (data.shape[0], data.shape[1], 5)
         use_data = np.zeros(use_shape)
@@ -230,7 +241,7 @@ def data_filter_location_and_bb(x):
 
 
 if __name__ == "__main__":
-    kitti_loader = KittiDataLoader(16, 5, 70, [], sub_set='raw')
+    kitti_loader = KittiDataLoader(16, 5, 70, [], sub_set='train')
     batch_slice_choose = 6
     for i in range(0, len(kitti_loader)):
         x, y, _ = kitti_loader.next_batch()
