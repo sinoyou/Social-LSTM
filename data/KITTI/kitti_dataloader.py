@@ -102,16 +102,20 @@ class KittiSocialDataLoader():
             max_frame = scene_df['frame'].max()
 
             # define a Tensor to hold all vru's info in one scenes
-            scene_tensor = np.zeros((max_frame, self.max_num_peds, 3))
+            scene_tensor = np.zeros((max_frame + 1, self.max_num_peds, 3))
 
+            # Hint: difference between index / vru / unique_id
+            # vru: original object in in KITTI.
+            # unique_id: '1{scene:2d}{vru_id:3d}', to uniquely identify a vru. Used as value in social Tensor.
+            # index: range(0, len(vru_ids)). Used as index in social Tensor, as unique_id may be not continuous.
             vru_ids = scene_df['id'].unique()
-            for vru in vru_ids:
+            for index, vru in enumerate(vru_ids):
                 vru_frames = scene_df[scene_df['id'] == vru]['frame']
                 vru_traj = scene_df[scene_df['id'] == vru][['loc_x', 'loc_z']]
                 # Due to scene and id in raw data can be zero, so a none zero id is needed. 
                 unique_id = self.get_unique_id(scene, vru)
-                scene_tensor[vru_frames, vru, 0] = unique_id
-                scene_tensor[vru_frames, vru, 1:3] = vru_traj
+                scene_tensor[list(vru_frames), index, 0] = unique_id
+                scene_tensor[list(vru_frames), index, 1:3] = vru_traj
 
             # slice scene_tensor to [seq_len, max_num_peds, 3]
             # Notice: Unlike UCY/ETH, due to disconnection of frames containing vru,
@@ -123,7 +127,8 @@ class KittiSocialDataLoader():
                     ptr += 1
                 # contains valid vru info, genearate a sequence
                 else:
-                    data.append(scene_tensor[ptr:ptr + self.seq_len, :])
+                    unit = scene_tensor[ptr:ptr + self.seq_len, :]
+                    data.append(unit)
                     # todo ptr += 1 or ptr += seq_len
                     ptr += self.seq_len
 
@@ -140,7 +145,7 @@ class KittiSocialDataLoader():
 
     def next_batch(self):
         if self.batch_ptr + self.batch_size <= len(self.data):
-            batch_data = np.stack(self.data[self.batch_ptr:self.batch_ptr + self.batch_size], axios=0)
+            batch_data = np.stack(self.data[self.batch_ptr:self.batch_ptr + self.batch_size], axis=0)
             self.batch_ptr += self.batch_size
         else:
             if self.fragment:
@@ -170,6 +175,7 @@ class KittiSocialDataLoader():
 if __name__ == '__main__':
     file_path = 'kitti-all-label02.csv'
     recorder = Recorder(summary_path='runs', board=False, logfile=False, stream=True)
-    loader = KittiSocialDataLoader(file_path=file_path, batch_size=1, seq_length=12, max_num_peds=153, mode='train',
+    loader = KittiSocialDataLoader(file_path=file_path, batch_size=5, seq_length=12, max_num_peds=80, mode='train',
                                    train_leave=None, recorder=recorder, valid_scene=None, fragment=True)
-    print(loader.next_batch())
+    x = loader.next_batch()
+    print(x[0])
