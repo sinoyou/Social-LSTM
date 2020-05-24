@@ -421,7 +421,9 @@ class SocialModel():
                     self.target_data: prev_target_data}
             [output, states, cost] = sess.run([self.final_output, self.final_states, self.cost], feed)
             # print cost
-            # Output is a list of lists where the inner lists contain matrices of shape 1x5. The outer list contains only one element (since seq_length=1) and the inner list contains maxNumPeds elements
+            # Output is a list of lists where the inner lists contain matrices of shape 1x5.
+            # The outer list contains only one element (since seq_length=1) and the inner list contains
+            # maxNumPeds elements。
             # output = output[0]
             newpos = np.zeros((1, self.maxNumPeds, 5))
             for pedindex, pedoutput in enumerate(output):
