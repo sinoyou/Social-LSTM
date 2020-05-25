@@ -6,14 +6,13 @@ import pickle
 import argparse
 import json
 
-from deprecated.social_utils_mot16 import SocialDataLoader
 from social_model import SocialModel
 from grid import getSequenceGridMask
 
-import path_static
-
 # from social_train import getSocialGrid, getSocialTensor
-from social_utils_kitti import KittiDataLoader, data_filter_location_and_bb
+# from social_utils_kitti import KittiDataLoader
+from data.csv_dataloader import SocialDataLoader
+from tools import Recorder
 
 
 def get_mean_error(predicted_traj, true_traj, observed_length, maxNumPeds):
@@ -110,10 +109,17 @@ def trajectory_record(dataset, real_traj_batch, gen_traj_batch, frame_batch, obs
     return list
 
 
-def evaluate(model, sess, sample_args, saved_args):
+def evaluate(model, sess, sample_args, saved_args, recorder):
     # Create a SocialDataLoader object with batch_size 1 and seq_length equal to observed_length + pred_length
-    data_loader = KittiDataLoader(1, sample_args.obs_length + sample_args.pred_length, saved_args.maxNumPeds, [],
-                                  sub_set='test')
+    # data_loader = KittiDataLoader(1, sample_args.obs_length + sample_args.pred_length, saved_args.maxNumPeds, [],
+    #                               sub_set='test')
+    data_loader = SocialDataLoader(file_path=sample_args.test_dataset,
+                                   batch_size=1,
+                                   seq_length=sample_args.obs_lenth + sample_args.pred_length,
+                                   max_num_peds=saved_args.maxNumPeds,
+                                   mode='valid',
+                                   train_leave=saved_args.train_leave,
+                                   recorder=recorder)
 
     # Reset all pointers of the data_loader
     data_loader.reset_ptr()
@@ -125,83 +131,74 @@ def evaluate(model, sess, sample_args, saved_args):
     total_mean_error = 0
     total_final_error = 0
 
-    json_result = []
-
     # For each batch
     for b in range(len(data_loader)):
         # Get the source, target and dataset data for the next batch
-        x, y, appendix = data_loader.next_batch()
+        data = data_loader.next_batch()
+        x, y = data[..., :sample_args.obs_length, :], data[..., sample_args.obs_length:, :]
 
         # Batch size is 1
-        x_batch, y_batch = x[0], y[0]
-
-        x_batch, x_rel_batch = data_filter_location_and_bb(x_batch)
-        y_batch, y_rel_batch = data_filter_location_and_bb(y_batch)
+        x_batch, y_batch, xy_batch = x[0], y[0], data[0]
 
         grid_batch = getSequenceGridMask(x_batch, saved_args.neighborhood_size, saved_args.grid_size)
 
         # relative process
         if saved_args.relative_path:
-            input_x = x_rel_batch
-            input_y = y_rel_batch
+            raise Exception('Relative not implemented.')
         else:
             input_x = x_batch
             input_y = y_batch
 
-        obs_traj = input_x[:sample_args.obs_length]
-        obs_grid = grid_batch[:sample_args.obs_length]
-        # obs_traj is an array of shape obs_length x maxNumPeds x 5
+        obs_traj = input_x
+        obs_grid = grid_batch
 
-        complete_traj = model.sample(sess, obs_traj, obs_grid, input_x, sample_args.pred_length)
-
-        def rel_to_abs(x):
-            result = np.zeros_like(x)
-            for i in range(1, result.shape[0]):
-                result[i, :] = result[i - 1, :] + x[i, :]
-            return result
+        # obs_traj is an array of shape obs_length x maxNumPeds x 3
+        complete_traj = model.sample(sess, obs_traj, obs_grid, xy_batch, sample_args.pred_length)
 
         if saved_args.relative_path:
-            cmp_pred = rel_to_abs(complete_traj)
-            cmp_true = rel_to_abs(input_x)
+            raise Exception('Relative not implemented.')
         else:
+            # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
             cmp_pred = complete_traj
-            cmp_true = input_x
-
-        # ipdb.set_trace()
-        # complete_traj is an array of shape (obs_length+pred_length) x maxNumPeds x 3
-
-        json_result.append((cmp_true, cmp_pred, appendix[0]))
+            cmp_true = xy_batch
 
         mean_error = get_mean_error(cmp_pred, cmp_true, sample_args.obs_length,
                                     saved_args.maxNumPeds)
         final_error = get_final_error(cmp_pred, cmp_true, sample_args.obs_length,
                                       saved_args.maxNumPeds)
+
         total_mean_error += mean_error
         total_final_error += final_error
 
         if b % 10 == 0:
-            print("Processed trajectory number : ", b, "out of ", len(data_loader), " trajectories")
+            recorder.logger.info("Processed trajectory number : ", b, "out of ", len(data_loader), " trajectories")
 
     # Print the mean error across all the batches
-    print("Total mean error of the model is ", total_mean_error / len(data_loader))
-    print("Total final error of the model is ", total_final_error / len(data_loader))
-
-    return json_result
+    recorder.logger.info("Total mean error of the model is ", total_mean_error / len(data_loader))
+    recorder.logger.info("Total final error of the model is ", total_final_error / len(data_loader))
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--test_dataset', type=str, default='data/KITTI/kitti-all-label02.csv',
+                        help='Path of test data sets.')
     # Observed length of the trajectory parameter
     parser.add_argument('--obs_length', type=int, default=5,
                         help='Observed length of the trajectory')
     # Predicted length of the trajectory parameter
     parser.add_argument('--pred_length', type=int, default=3,
                         help='Predicted length of the trajectory')
+    parser.add_argument('--phase', type=str, default='test')
     # Save path
     parser.add_argument('--save_path', type=str, help='Path of saving trained model.')
+    # log
+    parser.add_argument('--board_name', type=str, default='runs/')
 
     # Parse the parameters
     sample_args = parser.parse_args()
+
+    # recorder
+    recorder = Recorder(summary_path=sample_args.board_name, board=True)
 
     savepath = sample_args.save_path
     # Define the path for the config file for saved args
@@ -216,16 +213,16 @@ def main():
 
     # Get the checkpoint state for the model
     ckpt = tf.train.get_checkpoint_state(savepath)
-    print('loading model: ', ckpt.model_checkpoint_path)
+    recorder.logger.info('loading model: ', ckpt.model_checkpoint_path)
 
     # Restore the model at the checkpoint
     saver.restore(sess, ckpt.model_checkpoint_path)
 
     # Dataset to get data from
-    json_result = evaluate(model, sess, sample_args, saved_args)
+    evaluate(model, sess, sample_args, saved_args, recorder)
 
-    with open(os.path.join(sample_args.save_path, 'traj.json'), 'r') as f:
-        f.write(json.dumps(json_result))
+    # with open(os.path.join(sample_args.save_path, 'traj.json'), 'r') as f:
+    #     f.write(json.dumps(json_result))
 
 
 if __name__ == '__main__':

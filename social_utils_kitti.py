@@ -201,43 +201,6 @@ def print_for_valid(batch_slice):
             plt.show()
             break
 
-
-def data_filter_location_and_bb(x):
-    """
-    将[seq_lenth,maxNumPeds,N]转化为所需要的[seq_length, maxNumpeds, 5]
-    5个参数分别为 - PedID、x、z、bb-width, bb-height
-    :param x:
-    :return:
-    """
-
-    def data_filter(data):
-        use_shape = (data.shape[0], data.shape[1], 5)
-        use_data = np.zeros(use_shape)
-        use_data[:, :, 0] = data[:, :, 0]
-        use_data[:, :, 1] = data[:, :, 8]  # original x -> x
-        use_data[:, :, 2] = data[:, :, 10]  # original z -> y
-        use_data[:, :, 3] = (data[:, :, 3] - data[:, :, 1])  # width
-        use_data[:, :, 4] = (data[:, :, 4] - data[:, :, 2])  # height
-        return use_data
-
-    use_x = data_filter(x)
-
-    # Feed the source, target data
-    # use_x_batch -> use_x_relative_batch
-    def abs_to_def(data):
-        result = np.zeros_like(data)
-        result[:, :, 0] = data[:, :, 0]  # id
-        result[:, :, 3:5] = data[:, :, 3:5]  # width, height
-        result[0, :, 1:3] = 0  # rel start
-        for i in range(1, data.shape[0]):
-            result[i, :, 1:3] = data[i, :, 1:3] - data[i - 1, :, 1:3]
-        return result
-
-    use_x_rel = abs_to_def(use_x)  # id, rel_x, rel_y, width, height
-
-    return use_x, use_x_rel
-
-
 if __name__ == "__main__":
     kitti_loader = KittiDataLoader(16, 5, 70, [], sub_set='train')
     batch_slice_choose = 6

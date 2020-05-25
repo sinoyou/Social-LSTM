@@ -7,19 +7,24 @@ import numpy as np
 import logging
 import sys
 
-import path_static
 from social_model import SocialModel
-from deprecated.social_utils_mot16 import SocialDataLoader
 from grid import getSequenceGridMask
-from social_utils_kitti import KittiDataLoader, data_filter_location_and_bb
-
-FORMAT = '[%(levelname)s: %(filename)s: %(lineno)4d]: %(message)s'
-logging.basicConfig(level=logging.INFO, format=FORMAT, stream=sys.stdout)
-logger = logging.getLogger(__name__)
+# from social_utils_kitti import KittiDataLoader
+from data.csv_dataloader import SocialDataLoader
+from tools import Recorder
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--train_dataset', type=str,
+                        help='path of dataset with csv format')
+    parser.add_argument('--train_leave', default=None, nargs='+', type=int,
+                        help='scenes are left not for training.')
+    # log
+    parser.add_argument('--phase', default='train', type=str,
+                        help='header of board scalar.')
+    parser.add_argument('--board_name', default='runs/', type=str,
+                        help='path of saving summary and log.')
     # RNN size parameter (dimension of the output/hidden state)
     parser.add_argument('--rnn_size', type=int, default=128,
                         help='size of RNN hidden state')
@@ -45,10 +50,10 @@ def main():
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped
-    parser.add_argument('--grad_clip', type=float, default=10.,
+    parser.add_argument('--grad_clip', type=float, default=1.5,
                         help='clip gradients at this value')
     # Learning rate parameter
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=1e-3,
                         help='learning rate')
     # Decay rate for the learning rate parameter
     parser.add_argument('--decay_rate', type=float, default=0.95,
@@ -67,27 +72,36 @@ def main():
     parser.add_argument('--grid_size', type=int, default=2,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
-    parser.add_argument('--maxNumPeds', type=int, default=70,
+    parser.add_argument('--maxNumPeds', type=int, default=80,
                         help='Maximum Number of Pedestrians')
-    # Image info
-    parser.add_argument('--image_dim', type=tuple, default=(1392, 512),
-                        help='image width and height for social pooling')
     # Save place
     parser.add_argument('--save_dir', type=str, help='directory of saving ckpt, log and config.')
     # Visible Device
     parser.add_argument('--device', type=str, default='0', help='GPU device num')
     # Use relative path
-    parser.add_argument('--relative_path', type=bool, default=True,
+    parser.add_argument('--relative_path', type=bool, default=False,
                         help='Use relative path as obs and pred, default True')
     args = parser.parse_args()
-    logger.info(args)
-    train(args)
+
+    recorder = Recorder(summary_path=args.board_name)
+
+    recorder.logger.info(args)
+    train(args, recorder=recorder)
 
 
-def train(args):
+def train(args, recorder):
+    # set visible cuda device
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
+
     # Create the SocialDataLoader object
-    data_loader = KittiDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, ignore_list=[], sub_set='train')
+    # data_loader = KittiDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, ignore_list=[], sub_set='train')
+    data_loader = SocialDataLoader(file_path=args.train_dataset,
+                                   batch_size=args.batch_size,
+                                   seq_length=args.seq_length + 1,
+                                   max_num_peds=args.max_num_peds,
+                                   mode='train',
+                                   train_leave=args.train_leave,
+                                   recorder=recorder)
 
     savepath = args.save_dir
     # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
@@ -103,8 +117,6 @@ def train(args):
 
     # Initialize a TensorFlow session
     with tf.Session() as sess:
-        writer = tf.summary.FileWriter(logdir=os.path.join(args.save_dir, 'runs'), graph=sess.graph)
-
         # 模型初始化或预加载
         def get_model(force):
             if not force and os.path.exists(os.path.join(savepath, 'social_config.pkl')):
@@ -113,7 +125,7 @@ def train(args):
                 model = SocialModel(save_args)
                 # Restore variables from checkpoint
                 ckpt = tf.train.get_checkpoint_state(savepath)
-                logger.info('loading model: ', ckpt.model_checkpoint_path)
+                recorder.logger.info('loading model: ', ckpt.model_checkpoint_path)
                 saver = tf.train.Saver()
                 saver.restore(sess, save_path=ckpt.model_checkpoint_path)
             else:
@@ -143,55 +155,52 @@ def train(args):
                 start = time.time()
 
                 # Get the source, target and appendix data for the next batch
-                x, y, _ = data_loader.next_batch()
+                data = data_loader.next_batch()
+                x, y = data[..., :-1, :], data[..., 1:, :]
 
                 # variable to store the loss for this batch
                 loss_batch = 0
 
                 # For each sequence in the batch
                 for batch in range(data_loader.batch_size):
-                    # x, y: batch_size x seq_length x maxNumPeds x 11
-                    # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 5
+                    # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
                     x_batch, y_batch = x[batch], y[batch]
 
-                    x_batch_filter, x_rel_batch_filter = data_filter_location_and_bb(x_batch)
-                    y_batch_filter, y_rel_batch_filter = data_filter_location_and_bb(y_batch)
-
-                    grid_batch = getSequenceGridMask(x_batch_filter, args.neighborhood_size, args.grid_size)
+                    grid_batch = getSequenceGridMask(x_batch, args.neighborhood_size, args.grid_size)
 
                     if args.relative_path:
-                        input_data = x_batch_filter
-                        target_data = y_batch_filter
+                        raise Exception('No support for relative path now.')
                     else:
-                        input_data = x_rel_batch_filter
-                        target_data = y_rel_batch_filter
+                        input_data = x_batch
+                        target_data = y_batch
 
                     feed = {model.input_data: input_data,
                             model.target_data: target_data,
                             model.grid_data: grid_batch}
 
-                    train_loss, _, summary = sess.run([model.cost, model.train_op, model.merge], feed)
-
-                    writer.add_summary(summary, global_step=e * len(data_loader) + b)
+                    train_loss, _ = sess.run([model.cost, model.train_op], feed)
 
                     loss_batch += train_loss
 
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
-                logger.info(
+
+                # log and summary
+                recorder.logger.info(
                     "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
                         .format(
                         e * len(data_loader) + b,
                         args.num_epochs * len(data_loader),
                         e,
                         loss_batch, end - start))
+                recorder.writer.add_scalar('{}/train_loss'.format(args.phase), loss_batch, global_step=e)
 
                 # Save the model if the current epoch and batch number match the frequency
                 if (e * len(data_loader) + b) % args.save_every == 0 and ((e * len(data_loader) + b) > 0):
                     checkpoint_path = os.path.join(savepath, 'social_model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=e * len(data_loader) + b,
                                write_meta_graph=False)
-                    logger.info("model saved to {}".format(checkpoint_path))
+                    recorder.logger.info("model saved to {}".format(checkpoint_path))
 
 
 if __name__ == '__main__':
