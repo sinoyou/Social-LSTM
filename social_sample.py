@@ -135,7 +135,7 @@ def evaluate(model, sess, sample_args, saved_args, recorder):
     for b in range(len(data_loader)):
         # Get the source, target and dataset data for the next batch
         data = data_loader.next_batch()
-        x, y = data[..., :sample_args.obs_length, :], data[..., sample_args.obs_length:, :]
+        x, y = data[:sample_args.obs_length, :], data[sample_args.obs_length:, :]
 
         # Batch size is 1
         x_batch, y_batch, xy_batch = x[0], y[0], data[0]

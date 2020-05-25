@@ -3,9 +3,6 @@ import argparse
 import os
 import time
 import pickle
-import numpy as np
-import logging
-import sys
 
 from social_model import SocialModel
 from grid import getSequenceGridMask
@@ -16,7 +13,7 @@ from tools import Recorder
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_dataset', type=str,
+    parser.add_argument('--train_dataset', type=str, default='data/KITTI/kitti-all-label02.csv',
                         help='path of dataset with csv format')
     parser.add_argument('--train_leave', default=None, nargs='+', type=int,
                         help='scenes are left not for training.')
@@ -37,7 +34,7 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='minibatch size')
     # Length of sequence to be considered parameter
     parser.add_argument('--seq_length', type=int, default=10,
@@ -56,11 +53,11 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=1e-3,
                         help='learning rate')
     # Decay rate for the learning rate parameter
-    parser.add_argument('--decay_rate', type=float, default=0.95,
+    parser.add_argument('--decay_rate', type=float, default=5e-5,
                         help='decay rate for rmsprop')
     # Dropout not implemented.
     # Dropout probability parameter
-    parser.add_argument('--keep_prob', type=float, default=0.8,
+    parser.add_argument('--keep_prob', type=float, default=1.0,
                         help='dropout keep probability')
     # Dimension of the embeddings parameter
     parser.add_argument('--embedding_size', type=int, default=128,
@@ -75,7 +72,8 @@ def main():
     parser.add_argument('--maxNumPeds', type=int, default=80,
                         help='Maximum Number of Pedestrians')
     # Save place
-    parser.add_argument('--save_dir', type=str, help='directory of saving ckpt, log and config.')
+    parser.add_argument('--save_dir', type=str, default='save/',
+                        help='directory of saving ckpt, log and config.')
     # Visible Device
     parser.add_argument('--device', type=str, default='0', help='GPU device num')
     # Use relative path
@@ -98,7 +96,7 @@ def train(args, recorder):
     data_loader = SocialDataLoader(file_path=args.train_dataset,
                                    batch_size=args.batch_size,
                                    seq_length=args.seq_length + 1,
-                                   max_num_peds=args.max_num_peds,
+                                   max_num_peds=args.maxNumPeds,
                                    mode='train',
                                    train_leave=args.train_leave,
                                    recorder=recorder)
@@ -156,7 +154,7 @@ def train(args, recorder):
 
                 # Get the source, target and appendix data for the next batch
                 data = data_loader.next_batch()
-                x, y = data[..., :-1, :], data[..., 1:, :]
+                x, y = data[:-1, :], data[1:, :]
 
                 # variable to store the loss for this batch
                 loss_batch = 0

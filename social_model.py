@@ -43,7 +43,8 @@ class SocialModel:
 
         # Construct the basicLSTMCell recurrent unit with a dimension given by args.rnn_size
         with tf.name_scope("LSTM_cell"):
-            cell = rnn_cell.BasicLSTMCell(args.rnn_size, state_is_tuple=False)
+            # cell = rnn_cell.BasicLSTMCell(args.rnn_size, state_is_tuple=False)
+            cell = tf.keras.layers.LSTMCell(args.rnn_size)
 
         # placeholders for the input data and the target data
         # A sequence contains an ordered set of consecutive frames
@@ -72,7 +73,7 @@ class SocialModel:
 
         # Define LSTM states for each pedestrian
         with tf.variable_scope("LSTM_states"):
-            self.LSTM_states = tf.zeros([args.maxNumPeds, cell.state_size], name="LSTM_states")
+            self.LSTM_states = tf.zeros([args.maxNumPeds, sum(cell.state_size)], name="LSTM_states")
             # self.initial_states = tf.split(0, args.maxNumPeds, self.LSTM_states)
             self.initial_states = tf.split(self.LSTM_states, args.maxNumPeds, axis=0)
 
@@ -156,7 +157,9 @@ class SocialModel:
                 with tf.variable_scope("LSTM") as scope:
                     if seq > 0 or ped > 0:
                         scope.reuse_variables()
-                    self.output_states[ped], self.initial_states[ped] = cell(complete_input, self.initial_states[ped])
+                    self.output_states[ped], temp =\
+                        cell(complete_input, tf.split(self.initial_states[ped], 2, axis=1))
+                    self.initial_states[ped] = tf.concat(temp, axis=1)
 
                 # with tf.name_scope("reshape_output"):
                 # Store the output hidden state for the current pedestrian
@@ -220,7 +223,7 @@ class SocialModel:
     def define_embedding_and_output_layers(self, args):
         # Define variables for the spatial coordinates embedding layer
         with tf.variable_scope("coordinate_embedding"):
-            self.embedding_w = tf.get_variable("embedding_w", [4, args.embedding_size],
+            self.embedding_w = tf.get_variable("embedding_w", [2, args.embedding_size],
                                                initializer=tf.truncated_normal_initializer(stddev=0.01))
             self.embedding_b = tf.get_variable("embedding_b", [args.embedding_size],
                                                initializer=tf.constant_initializer(0.01))
