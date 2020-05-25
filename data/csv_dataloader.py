@@ -4,7 +4,7 @@ import pandas as pd
 import random
 from tools import Recorder
 
-class KittiSocialDataLoader():
+class SocialDataLoader():
     def __init__(self, file_path, batch_size, seq_length, max_num_peds, mode, train_leave, recorder, seed=17373321,
                  valid_scene=None, fragment=False):
         """
@@ -173,9 +173,9 @@ class KittiSocialDataLoader():
 
 
 if __name__ == '__main__':
-    file_path = 'kitti-all-label02.csv'
+    file_path = 'KITTI/kitti-all-label02.csv'
     recorder = Recorder(summary_path='runs', board=False, logfile=False, stream=True)
-    loader = KittiSocialDataLoader(file_path=file_path, batch_size=5, seq_length=12, max_num_peds=80, mode='train',
-                                   train_leave=None, recorder=recorder, valid_scene=None, fragment=True)
+    loader = SocialDataLoader(file_path=file_path, batch_size=5, seq_length=12, max_num_peds=80, mode='train',
+                              train_leave=None, recorder=recorder, valid_scene=None, fragment=True)
     x = loader.next_batch()
     print(x[0])
