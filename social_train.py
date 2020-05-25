@@ -3,7 +3,6 @@ import argparse
 import os
 import time
 import pickle
-import ipdb
 
 from social_model import SocialModel
 from social_utils import SocialDataLoader

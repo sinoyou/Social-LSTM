@@ -1,7 +1,6 @@
 import os
 import pickle
 import numpy as np
-import ipdb
 
 
 # The data loader class that loads data from the datasets considering
