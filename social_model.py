@@ -43,8 +43,8 @@ class SocialModel:
 
         # Construct the basicLSTMCell recurrent unit with a dimension given by args.rnn_size
         with tf.name_scope("LSTM_cell"):
-            # cell = rnn_cell.BasicLSTMCell(args.rnn_size, state_is_tuple=False)
-            cell = tf.keras.layers.LSTMCell(args.rnn_size)
+            cell = rnn_cell.BasicLSTMCell(args.rnn_size, state_is_tuple=False)
+            # cell = tf.keras.layers.LSTMCell(args.rnn_size)
 
         # placeholders for the input data and the target data
         # A sequence contains an ordered set of consecutive frames
@@ -73,7 +73,7 @@ class SocialModel:
 
         # Define LSTM states for each pedestrian
         with tf.variable_scope("LSTM_states"):
-            self.LSTM_states = tf.zeros([args.maxNumPeds, sum(cell.state_size)], name="LSTM_states")
+            self.LSTM_states = tf.zeros([args.maxNumPeds, cell.state_size], name="LSTM_states")
             # self.initial_states = tf.split(0, args.maxNumPeds, self.LSTM_states)
             self.initial_states = tf.split(self.LSTM_states, args.maxNumPeds, axis=0)
 
@@ -81,7 +81,7 @@ class SocialModel:
         with tf.variable_scope("Hidden_states"):
             # self.output_states = tf.zeros([args.maxNumPeds, cell.output_size], name="hidden_states")
             # self.output_states = tf.split(0, args.maxNumPeds, tf.zeros([args.maxNumPeds, cell.output_size]))
-            self.output_states = tf.split(tf.zeros([args.maxNumPeds, cell.state_size[0]]), args.maxNumPeds, axis=0)
+            self.output_states = tf.split(tf.zeros([args.maxNumPeds, cell.output_size]), args.maxNumPeds, axis=0)
 
         # List of tensors each of shape args.maxNumPedsx3 corresponding to each frame in the sequence
         with tf.name_scope("frame_data_tensors"):
@@ -157,9 +157,9 @@ class SocialModel:
                 with tf.variable_scope("LSTM") as scope:
                     if seq > 0 or ped > 0:
                         scope.reuse_variables()
-                    self.output_states[ped], temp =\
-                        cell(complete_input, tf.split(self.initial_states[ped], 2, axis=1))
-                    self.initial_states[ped] = tf.concat(temp, axis=1)
+                    self.output_states[ped], temp = \
+                        cell(complete_input, self.initial_states[ped])
+                    self.initial_states[ped] = temp
 
                 # with tf.name_scope("reshape_output"):
                 # Store the output hidden state for the current pedestrian
