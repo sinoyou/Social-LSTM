@@ -10,7 +10,6 @@ from grid import getSequenceGridMask
 from data.csv_dataloader import SocialDataLoader
 from tools import Recorder
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_dataset', type=str, default='data/KITTI/kitti-all-label02.csv',
@@ -34,7 +33,7 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='minibatch size')
     # Length of sequence to be considered parameter
     parser.add_argument('--seq_length', type=int, default=10,
