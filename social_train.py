@@ -10,6 +10,7 @@ from grid import getSequenceGridMask
 from data.csv_dataloader import SocialDataLoader
 from tools import Recorder
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_dataset', type=str, default='data/KITTI/kitti-all-label02.csv',
@@ -33,13 +34,13 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=10,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help='minibatch size')
     # Length of sequence to be considered parameter
-    parser.add_argument('--seq_length', type=int, default=10,
+    parser.add_argument('--seq_length', type=int, default=12,
                         help='RNN sequence length')
     # Number of epochs parameter
-    parser.add_argument('--num_epochs', type=int, default=30,
+    parser.add_argument('--num_epochs', type=int, default=101,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
     parser.add_argument('--save_every', type=int, default=50,
@@ -49,7 +50,7 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=1.5,
                         help='clip gradients at this value')
     # Learning rate parameter
-    parser.add_argument('--learning_rate', type=float, default=1e-4,
+    parser.add_argument('--learning_rate', type=float, default=3e-3,
                         help='learning rate')
     # Decay rate for the learning rate parameter
     parser.add_argument('--decay_rate', type=float, default=5e-5,
@@ -62,13 +63,13 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=64,
                         help='Embedding dimension for the spatial coordinates')
     # Size of neighborhood to be considered parameter
-    parser.add_argument('--neighborhood_size', type=int, default=5,
+    parser.add_argument('--neighborhood_size', type=int, default=32,
                         help='Neighborhood size to be considered for social grid')
     # Size of the social grid parameter
-    parser.add_argument('--grid_size', type=int, default=2,
+    parser.add_argument('--grid_size', type=int, default=8,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
-    parser.add_argument('--maxNumPeds', type=int, default=5,
+    parser.add_argument('--maxNumPeds', type=int, default=20,
                         help='Maximum Number of Pedestrians')
     # Save place
     parser.add_argument('--save_dir', type=str, default='save/',
@@ -99,6 +100,7 @@ def train(args, recorder):
                                    mode='train',
                                    train_leave=args.train_leave,
                                    recorder=recorder)
+    batch = data_loader.next_batch()
 
     savepath = args.save_dir
     # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
@@ -160,6 +162,10 @@ def train(args, recorder):
                 # variable to store the loss for this batch
                 loss_batch = 0
 
+                # variables to store information of loss counter
+                counter_batch = 0
+                full_counter_batch = 0
+
                 # For each sequence in the batch
                 for batch in range(data_loader.batch_size):
                     # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
@@ -178,21 +184,33 @@ def train(args, recorder):
                             model.target_data: target_data,
                             model.grid_data: grid_batch}
 
-                    train_loss, _ = sess.run([model.cost, model.train_op], feed)
+                    train_loss, _, counter = sess.run([model.cost, model.train_op, model.counter], feed)
+
+                    def get_full_counter(data):
+                        # Get maximum edge of counter by the number of valid vrus.
+                        full_counter = 0
+                        for index in range(data.shape[0]):
+                            if data[index, :].sum() > 0:
+                                full_counter += data.shape[1]
+                        return full_counter
 
                     loss_batch += train_loss
+                    counter_batch += counter
+                    full_counter_batch += get_full_counter(input_data)
+                    assert counter <= get_full_counter(input_data)
 
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
 
                 # log and summary
                 recorder.logger.info(
-                    "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
+                    "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}, cnt/full = {}/{}"
                         .format(
                         e * len(data_loader) + b,
                         args.num_epochs * len(data_loader),
                         e,
-                        loss_batch, end - start))
+                        loss_batch, end - start,
+                        counter_batch, full_counter_batch))
                 recorder.writer.add_scalar('{}/train_loss'.format(args.phase), loss_batch, global_step=e)
 
                 # Save the model if the current epoch and batch number match the frequency
