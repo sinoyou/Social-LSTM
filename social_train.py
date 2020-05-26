@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=1,
+    parser.add_argument('--batch_size', type=int, default=10,
                         help='minibatch size')
     # Length of sequence to be considered parameter
     parser.add_argument('--seq_length', type=int, default=10,
@@ -49,7 +49,7 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=1.5,
                         help='clip gradients at this value')
     # Learning rate parameter
-    parser.add_argument('--learning_rate', type=float, default=1e-3,
+    parser.add_argument('--learning_rate', type=float, default=1e-4,
                         help='learning rate')
     # Decay rate for the learning rate parameter
     parser.add_argument('--decay_rate', type=float, default=5e-5,
@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--keep_prob', type=float, default=1.0,
                         help='dropout keep probability')
     # Dimension of the embeddings parameter
-    parser.add_argument('--embedding_size', type=int, default=128,
+    parser.add_argument('--embedding_size', type=int, default=64,
                         help='Embedding dimension for the spatial coordinates')
     # Size of neighborhood to be considered parameter
     parser.add_argument('--neighborhood_size', type=int, default=5,
@@ -68,7 +68,7 @@ def main():
     parser.add_argument('--grid_size', type=int, default=2,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
-    parser.add_argument('--maxNumPeds', type=int, default=80,
+    parser.add_argument('--maxNumPeds', type=int, default=5,
                         help='Maximum Number of Pedestrians')
     # Save place
     parser.add_argument('--save_dir', type=str, default='save/',
@@ -104,7 +104,8 @@ def train(args, recorder):
     # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
     if os.path.exists(savepath):
         print("[WARNING]: Save Path Already Exists. Do you want to continue ? ")
-        command = input('[y/n]:')
+        # command = input('[y/n]:')
+        command = 'y'
         if len(command) == 1 and command.lower()[0] == 'y':
             pass
         else:
@@ -114,6 +115,7 @@ def train(args, recorder):
 
     # Initialize a TensorFlow session
     with tf.Session() as sess:
+
         # 模型初始化或预加载
         def get_model(force):
             if not force and os.path.exists(os.path.join(savepath, 'social_config.pkl')):
@@ -153,7 +155,7 @@ def train(args, recorder):
 
                 # Get the source, target and appendix data for the next batch
                 data = data_loader.next_batch()
-                x, y = data[:-1, :], data[1:, :]
+                x, y = data[:, :-1], data[:, 1:]
 
                 # variable to store the loss for this batch
                 loss_batch = 0

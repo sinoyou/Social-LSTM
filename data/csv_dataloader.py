@@ -110,6 +110,8 @@ class SocialDataLoader():
             # index: range(0, len(vru_ids)). Used as index in social Tensor, as unique_id may be not continuous.
             vru_ids = scene_df['id'].unique()
             for index, vru in enumerate(vru_ids):
+                if index >= self.max_num_peds:
+                    break
                 vru_frames = scene_df[scene_df['id'] == vru]['frame']
                 vru_traj = scene_df[scene_df['id'] == vru][['loc_x', 'loc_z']]
                 # Due to scene and id in raw data can be zero, so a none zero id is needed. 
