@@ -56,11 +56,8 @@ def getGridMask(frame, neighborhood_size, grid_size):
                 continue
 
             # If in surrounding, calculate the grid cell
-            cell_x = int(np.floor(((other_x - width_low) / width_bound) * grid_size))
-            cell_y = int(np.floor(((other_y - height_low) / height_bound) * grid_size))
-            # 浮点数精度问题，可能存在越界的可能
-            cell_x = min(1, cell_x)
-            cell_y = min(1, cell_y)
+            cell_x = int(((other_x - width_low) / width_bound) * grid_size)
+            cell_y = int(((other_y - height_low) / height_bound) * grid_size)
             # Other ped is in the corresponding grid cell of current ped
             frame_mask[pedindex, otherpedindex, cell_x + cell_y * grid_size] = 1
 

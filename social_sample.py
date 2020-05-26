@@ -153,7 +153,8 @@ def evaluate(model, sess, sample_args, saved_args, recorder):
         obs_grid = grid_batch
 
         # obs_traj is an array of shape obs_length x maxNumPeds x 3
-        complete_traj = model.sample(sess, obs_traj, obs_grid, xy_batch, sample_args.pred_length)
+        complete_traj = model.sample(sess, obs_traj, obs_grid, xy_batch, sample_args.pred_length,
+                                     data_loader=data_loader)
 
         if saved_args.relative_path:
             raise Exception('Relative not implemented.')

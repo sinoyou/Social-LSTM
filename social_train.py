@@ -165,7 +165,8 @@ def train(args, recorder):
                     # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
                     x_batch, y_batch = x[batch], y[batch]
 
-                    grid_batch = getSequenceGridMask(x_batch, args.neighborhood_size, args.grid_size)
+                    raw_x_batch = data_loader.norm_to_raw(x_batch)
+                    grid_batch = getSequenceGridMask(raw_x_batch, args.neighborhood_size, args.grid_size)
 
                     if args.relative_path:
                         raise Exception('No support for relative path now.')

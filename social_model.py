@@ -380,7 +380,7 @@ class SocialModel:
         x = np.random.multivariate_normal(mean, cov, 1)
         return x[0][0], x[0][1]
 
-    def sample(self, sess, traj, grid, true_traj, num):
+    def sample(self, sess, traj, grid, true_traj, num, data_loader):
         # traj is a sequence of frames (of length obs_length)
         # so traj shape is (obs_length x maxNumPeds x 3)
         # grid is a tensor of shape obs_length x maxNumPeds x maxNumPeds x (gs**2)
@@ -427,7 +427,8 @@ class SocialModel:
                 newpos[0, pedindex, :] = [prev_data[0, pedindex, 0], next_x, next_y]
             ret = np.vstack((ret, newpos))
             prev_data = newpos
-            prev_grid_data = getSequenceGridMask(prev_data, self.args.neighborhood_size, self.grid_size)
+            raw_prev_data = data_loader.norm_to_raw(prev_data)
+            prev_grid_data = getSequenceGridMask(raw_prev_data, self.args.neighborhood_size, self.grid_size)
             if t != num - 1:
                 prev_target_data = np.reshape(true_traj[traj.shape[0] + t + 1], (1, self.maxNumPeds, 3))
 

@@ -4,6 +4,7 @@ import pandas as pd
 import random
 from tools import Recorder
 
+
 class SocialDataLoader():
     def __init__(self, file_path, batch_size, seq_length, max_num_peds, mode, train_leave, recorder, seed=17373321,
                  valid_scene=None, fragment=False):
@@ -101,17 +102,17 @@ class SocialDataLoader():
             scene_df = filter_raw[filter_raw['scene'] == scene]
             max_frame = scene_df['frame'].max()
 
+            # get vru id list
+            vru_ids = scene_df['id'].unique()
+
             # define a Tensor to hold all vru's info in one scenes
-            scene_tensor = np.zeros((max_frame + 1, self.max_num_peds, 3))
+            scene_tensor = np.zeros((max_frame + 1, len(vru_ids), 3))
 
             # Hint: difference between index / vru / unique_id
             # vru: original object in in KITTI.
             # unique_id: '1{scene:2d}{vru_id:3d}', to uniquely identify a vru. Used as value in social Tensor.
             # index: range(0, len(vru_ids)). Used as index in social Tensor, as unique_id may be not continuous.
-            vru_ids = scene_df['id'].unique()
             for index, vru in enumerate(vru_ids):
-                if index >= self.max_num_peds:
-                    break
                 vru_frames = scene_df[scene_df['id'] == vru]['frame']
                 vru_traj = scene_df[scene_df['id'] == vru][['loc_x', 'loc_z']]
                 # Due to scene and id in raw data can be zero, so a none zero id is needed. 
@@ -124,12 +125,23 @@ class SocialDataLoader():
             # social_tensor[frame, :, :] may be zeros.
             ptr = 0
             while ptr + self.seq_len <= scene_tensor.shape[0]:
-                # if all zero at first seq, then skip
                 if np.sum(scene_tensor[ptr, :]) == 0:
+
+                    # if all zero at first seq, then skip
                     ptr += 1
-                # contains valid vru info, genearate a sequence
+
                 else:
-                    unit = scene_tensor[ptr:ptr + self.seq_len, :]
+
+                    # contains valid vru info, generate a sequence
+                    counter = 0
+
+                    # define unit, to shrink scene_tensor[ptr:ptr+seq_len, :, :]
+                    unit = np.zeros((self.seq_len, self.max_num_peds, 3))
+                    for vru_index in range(scene_tensor.shape[1]):
+                        if np.sum(scene_tensor[ptr:ptr + self.seq_len, vru_index, :]) != 0:
+                            unit[:, counter, :] = scene_tensor[ptr:ptr + self.seq_len, vru_index, :]
+                            counter += 1
+
                     data.append(unit)
                     # todo ptr += 1 or ptr += seq_len
                     ptr += self.seq_len
@@ -172,6 +184,18 @@ class SocialDataLoader():
 
     def get_true_id(self, unique_ids):
         return unique_ids % 1e3
+
+    def norm_to_raw(self, data):
+        raw_data = data.copy()
+        if raw_data.shape[-1] == 3:
+            raw_data[..., 1] = raw_data[..., 1] * self.norm_metric['loc_x_std'] + self.norm_metric['loc_x_mean']
+            raw_data[..., 2] = raw_data[..., 2] * self.norm_metric['loc_z_std'] + self.norm_metric['loc_z_mean']
+        elif raw_data.shape[-1] == 5:
+            raw_data[..., 0] = raw_data[..., 0] * self.norm_metric['loc_x_std'] + self.norm_metric['loc_x_mean']
+            raw_data[..., 1] = raw_data[..., 1] * self.norm_metric['loc_z_std'] + self.norm_metric['loc_z_mean']
+            raw_data[..., 2] = raw_data[..., 2] * self.norm_metric['loc_x_std'] + self.norm_metric['loc_x_mean']
+            raw_data[..., 3] = raw_data[..., 3] * self.norm_metric['loc_z_std'] + self.norm_metric['loc_z_mean']
+        return raw_data
 
 
 if __name__ == '__main__':
