@@ -25,30 +25,23 @@ def get_mean_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     observed_length : The length of trajectory observed
     '''
     # The data structure to store all errors
-    error = np.zeros(len(true_traj) - observed_length)
-    # For each point in the predicted part of the trajectory
-    for i in range(observed_length, len(true_traj)):
-        # The predicted position. This will be a maxNumPeds x 3 matrix
-        pred_pos = predicted_traj[i, :]
-        # The true position. This will be a maxNumPeds x 3 matrix
-        true_pos = true_traj[i, :]
-        timestep_error = 0
-        counter = 0
-        for j in range(maxNumPeds):
-            if true_pos[j, 0] == 0:
-                # Non-existent ped
-                continue
-            else:
-                timestep_error += np.linalg.norm(true_pos[j, [1, 2]] - pred_pos[j, [1, 2]])
-                counter += 1
+    error_list = list()
 
-        error[i - observed_length] = timestep_error / counter
+    for p in range(maxNumPeds):
+        p_pred_traj = predicted_traj[observed_length:, p, :]
+        p_true_traj = true_traj[observed_length:, p, :]
 
-        # The euclidean distance is the error
-        # error[i-observed_length] = np.linalg.norm(true_pos - pred_pos)
+        p_pred_traj_valid = p_pred_traj[(p_pred_traj[:, 0] > 0) & (p_true_traj[:, 0] > 0), 1:3]
+        p_true_traj_valid = p_true_traj[(p_pred_traj[:, 0] > 0) & (p_true_traj[:, 0] > 0), 1:3]
+
+        p_error_vector = np.sqrt(np.sum((p_pred_traj_valid - p_true_traj_valid) ** 2, axis=-1))
+
+        # if exist valid parts
+        if p_error_vector.shape[0] > 0:
+            error_list.append(np.mean(p_error_vector))
 
     # Return the mean error
-    return np.mean(error)
+    return error_list
 
 
 def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
@@ -61,30 +54,24 @@ def get_final_error(predicted_traj, true_traj, observed_length, maxNumPeds):
     observed_length : The length of trajectory observed
     '''
     # The data structure to store all errors
-    error = np.zeros(1)
-    # For each point in the predicted part of the trajectory
-    for i in range(len(true_traj) - 1, len(true_traj)):
-        # The predicted position. This will be a maxNumPeds x 3 matrix
-        pred_pos = predicted_traj[i, :]
-        # The true position. This will be a maxNumPeds x 3 matrix
-        true_pos = true_traj[i, :]
-        timestep_error = 0
-        counter = 0
-        for j in range(maxNumPeds):
-            if true_pos[j, 0] == 0:
-                # Non-existent ped
-                continue
-            else:
-                timestep_error += np.linalg.norm(true_pos[j, [1, 2]] - pred_pos[j, [1, 2]])
-                counter += 1
+    error_list = list()
 
-        error[0] = timestep_error / counter
+    for p in range(maxNumPeds):
+        p_pred_traj = predicted_traj[observed_length:, p, :]
+        p_true_traj = true_traj[observed_length:, p, :]
 
-        # The euclidean distance is the error
-        # error[i-observed_length] = np.linalg.norm(true_pos - pred_pos)
+        p_pred_traj_valid = p_pred_traj[(p_pred_traj[:, 0] > 0) & (p_true_traj[:, 0] > 0), 1:3]
+        p_true_traj_valid = p_true_traj[(p_pred_traj[:, 0] > 0) & (p_true_traj[:, 0] > 0), 1:3]
+
+        p_error_vector = np.sqrt(np.sum((p_pred_traj_valid - p_true_traj_valid) ** 2, axis=-1))
+        # if exist valid parts
+        if p_error_vector.shape[0] > 0:
+            # only append in 'reach to the tail' mode.
+            if p_pred_traj[-1, 0] > 0 and p_true_traj[-1, 0] > 0:
+                error_list.append(p_error_vector[-1])
 
     # Return the mean error
-    return np.mean(error)
+    return error_list
 
 
 def trajectory_dict_generate(dataset, real_traj, gen_traj, frame_seq, obs_len):
@@ -115,10 +102,11 @@ def evaluate(model, sess, sample_args, saved_args, recorder):
     #                               sub_set='test')
     data_loader = SocialDataLoader(file_path=sample_args.test_dataset,
                                    batch_size=1,
-                                   seq_length=sample_args.obs_lenth + sample_args.pred_length,
+                                   seq_length=sample_args.obs_length + sample_args.pred_length,
                                    max_num_peds=saved_args.maxNumPeds,
                                    mode='valid',
                                    train_leave=saved_args.train_leave,
+                                   valid_scene=sample_args.valid_scene,
                                    recorder=recorder)
 
     # Reset all pointers of the data_loader
@@ -128,14 +116,14 @@ def evaluate(model, sess, sample_args, saved_args, recorder):
     traj_list = []
 
     # Variable to maintain total error
-    total_mean_error = 0
-    total_final_error = 0
+    total_mean_error = list()
+    total_final_error = list()
 
     # For each batch
     for b in range(len(data_loader)):
         # Get the source, target and dataset data for the next batch
         data = data_loader.next_batch()
-        x, y = data[:sample_args.obs_length, :], data[sample_args.obs_length:, :]
+        x, y = data[:, :sample_args.obs_length], data[:, sample_args.obs_length:]
 
         # Batch size is 1
         x_batch, y_batch, xy_batch = x[0], y[0], data[0]
@@ -163,37 +151,42 @@ def evaluate(model, sess, sample_args, saved_args, recorder):
             cmp_pred = complete_traj
             cmp_true = xy_batch
 
-        mean_error = get_mean_error(cmp_pred, cmp_true, sample_args.obs_length,
+        raw_cmp_pred = data_loader.norm_to_raw(cmp_pred)
+        raw_cmp_true = data_loader.norm_to_raw(cmp_true)
+        mean_error = get_mean_error(raw_cmp_pred, raw_cmp_true, sample_args.obs_length,
                                     saved_args.maxNumPeds)
-        final_error = get_final_error(cmp_pred, cmp_true, sample_args.obs_length,
+        final_error = get_final_error(raw_cmp_pred, raw_cmp_true, sample_args.obs_length,
                                       saved_args.maxNumPeds)
 
         total_mean_error += mean_error
         total_final_error += final_error
 
         if b % 10 == 0:
-            recorder.logger.info("Processed trajectory number : ", b, "out of ", len(data_loader), " trajectories")
+            recorder.logger.info("Processed trajectory number : {} out of {} trajectories".format(b, len(data_loader)))
 
     # Print the mean error across all the batches
-    recorder.logger.info("Total mean error of the model is ", total_mean_error / len(data_loader))
-    recorder.logger.info("Total final error of the model is ", total_final_error / len(data_loader))
+    recorder.logger.info("Total mean error of the model is {}".format(sum(total_mean_error) / len(total_mean_error)))
+    recorder.logger.info("Total final error of the model is {}".format(sum(total_final_error) / len(total_final_error)))
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_dataset', type=str, default='data/KITTI/kitti-all-label02.csv',
                         help='Path of test data sets.')
+    parser.add_argument('--valid_scene', nargs='+', type=int,
+                        help='scenes for validation')
     # Observed length of the trajectory parameter
-    parser.add_argument('--obs_length', type=int, default=5,
+    parser.add_argument('--obs_length', type=int, default=6,
                         help='Observed length of the trajectory')
     # Predicted length of the trajectory parameter
-    parser.add_argument('--pred_length', type=int, default=3,
+    parser.add_argument('--pred_length', type=int, default=8,
                         help='Predicted length of the trajectory')
     parser.add_argument('--phase', type=str, default='test')
     # Save path
-    parser.add_argument('--save_path', type=str, help='Path of saving trained model.')
+    parser.add_argument('--save_path', type=str, default='save/',
+                        help='Path of saving trained model.')
     # log
-    parser.add_argument('--board_name', type=str, default='runs/')
+    parser.add_argument('--board_name', type=str, default='runs/test/')
 
     # Parse the parameters
     sample_args = parser.parse_args()
@@ -214,7 +207,7 @@ def main():
 
     # Get the checkpoint state for the model
     ckpt = tf.train.get_checkpoint_state(savepath)
-    recorder.logger.info('loading model: ', ckpt.model_checkpoint_path)
+    recorder.logger.info('loading model: ' + str(ckpt.model_checkpoint_path))
 
     # Restore the model at the checkpoint
     saver.restore(sess, ckpt.model_checkpoint_path)
