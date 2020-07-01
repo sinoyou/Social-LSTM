@@ -50,16 +50,18 @@ class SocialModel:
         # A sequence contains an ordered set of consecutive frames
         # Each frame can contain a maximum of 'args.maxNumPeds' number of peds
         # For each ped we have their (pedID, x, y) positions as input
-        self.input_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 3], name="input_data")
+        self.input_data = tf.placeholder(tf.float32, [args.batch_size, args.seq_length, args.maxNumPeds, 3],
+                                         name="input_data")
 
         # target data would be the same format as input_data except with
         # one time-step ahead
-        self.target_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, 3], name="target_data")
+        self.target_data = tf.placeholder(tf.float32, [args.batch_size, args.seq_length, args.maxNumPeds, 3],
+                                          name="target_data")
 
         # Grid data would be a binary matrix which encodes whether a pedestrian is present in
         # a grid cell of other pedestrian
         # yzn : 真值表的值，并且在前三维确定后，最后一维里'最多只有一个1' - 非常重要
-        self.grid_data = tf.placeholder(tf.float32, [args.seq_length, args.maxNumPeds, args.maxNumPeds,
+        self.grid_data = tf.placeholder(tf.float32, [args.batch_size, args.seq_length, args.maxNumPeds, args.maxNumPeds,
                                                      args.grid_size * args.grid_size], name="grid_data")
 
         # Variable to hold the value of the learning rate
@@ -73,33 +75,43 @@ class SocialModel:
 
         # Define LSTM states for each pedestrian
         with tf.variable_scope("LSTM_states"):
-            self.LSTM_states = tf.zeros([args.maxNumPeds, cell.state_size], name="LSTM_states")
+            self.LSTM_states = tf.zeros([args.batch_size, args.maxNumPeds, cell.state_size], name="LSTM_states")
             # self.initial_states = tf.split(0, args.maxNumPeds, self.LSTM_states)
-            self.initial_states = tf.split(self.LSTM_states, args.maxNumPeds, axis=0)
+            # self.initial_states = tf.split(self.LSTM_states, args.maxNumPeds, axis=0) legacy
+            self.initial_states = self.LSTM_states
 
         # Define hidden output states for each pedestrian
         with tf.variable_scope("Hidden_states"):
             # self.output_states = tf.zeros([args.maxNumPeds, cell.output_size], name="hidden_states")
             # self.output_states = tf.split(0, args.maxNumPeds, tf.zeros([args.maxNumPeds, cell.output_size]))
-            self.output_states = tf.split(tf.zeros([args.maxNumPeds, cell.output_size]), args.maxNumPeds, axis=0)
+            # legacy
+            # self.output_states = tf.split(tf.zeros([args.maxNumPeds, cell.output_size]), args.maxNumPeds, axis=0)
+            self.output_states = tf.zeros([args.batch_size, args.maxNumPeds, cell.output_size])
 
         # List of tensors each of shape args.maxNumPedsx3 corresponding to each frame in the sequence
         with tf.name_scope("frame_data_tensors"):
             # frame_data = tf.split(0, args.seq_length, self.input_data, name="frame_data")
             # frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(0, args.seq_length, self.input_data)]
-            frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.input_data, args.seq_length, 0)]
+            # legacy
+            # frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.input_data, args.seq_length, 0)]
+            batch_frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.input_data, args.batch_size, 0)]
 
         with tf.name_scope("frame_target_data_tensors"):
             # frame_target_data = tf.split(0, args.seq_length, self.target_data, name="frame_target_data")
             # frame_target_data =
             # [tf.squeeze(target_, [0]) for target_ in tf.split(0, args.seq_length, self.target_data)]
-            frame_target_data = [tf.squeeze(target_, [0]) for target_ in tf.split(self.target_data, args.seq_length, 0)]
+            # legacy
+            # frame_target_data = [tf.squeeze(target_, [0]) for target_ in tf.split(self.target_data, args.seq_length, 0)]
+            batch_frame_target_data = [tf.squeeze(target_, [0]) for target_ in
+                                       tf.split(self.target_data, args.batch_size, 0)]
 
         with tf.name_scope("grid_frame_data_tensors"):
             # This would contain a list of tensors each of shape MNP x MNP x (GS**2) encoding the mask
             # grid_frame_data = tf.split(0, args.seq_length, self.grid_data, name="grid_frame_data")
             # grid_frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(0, args.seq_length, self.grid_data)]
-            grid_frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.grid_data, args.seq_length, 0)]
+            # legacy
+            # grid_frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.grid_data, args.seq_length, 0)]
+            batch_grid_frame_data = [tf.squeeze(input_, [0]) for input_ in tf.split(self.grid_data, args.batch_size, 0)]
 
         # Cost
         with tf.name_scope("Cost_related_stuff"):
@@ -111,88 +123,100 @@ class SocialModel:
         with tf.name_scope("Distribution_parameters_stuff"):
             # self.initial_output = tf.zeros([args.maxNumPeds, self.output_size], name="distribution_parameters")
             # self.initial_output = tf.split(0, args.maxNumPeds, tf.zeros([args.maxNumPeds, self.output_size]))
-            self.initial_output = tf.split(tf.zeros([args.maxNumPeds, self.output_size]), args.maxNumPeds, 0)
+            # legacy
+            # self.initial_output = tf.split(tf.zeros([args.maxNumPeds, self.output_size]), args.maxNumPeds, 0)
+            self.initial_output = tf.zeros([args.batch_size, args.maxNumPeds, self.output_size])
 
         # Tensor to represent non-existent ped
         with tf.name_scope("Non_existent_ped_stuff"):
             nonexistent_ped = tf.constant(0.0, name="zero_ped")
 
-        # Iterate over each frame in the sequence
-        for seq, frame in enumerate(frame_data):
+        for batch_i in range(self.args.batch_size):
 
-            current_frame_data = frame  # MNP x 3 tensor
-            current_grid_frame_data = grid_frame_data[seq]  # MNP x MNP x (GS**2) tensor
-            # yzn : social tensor 在原始源代码中根本没有启用。
-            social_tensor = self.getSocialTensor(current_grid_frame_data,
-                                                 self.output_states)  # MNP x (GS**2 * RNN_size)
-            # NOTE: Using a tensor of zeros as the social tensor
-            # social_tensor = tf.zeros([args.maxNumPeds, args.grid_size * args.grid_size * args.rnn_size])
+            # prepare unit in a batch
+            frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_data[batch_i], axis=0)]
+            frame_target_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_target_data, axis=0)]
+            grid_frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_grid_frame_data[batch_i], axis=0)]
 
-            for ped in range(args.maxNumPeds):
+            # Iterate over each frame in the sequence
+            for seq, frame in enumerate(frame_data):
 
-                # pedID of the current pedestrian
-                pedID = current_frame_data[ped, 0]
+                current_frame_data = frame  # MNP x 3 tensor
+                current_grid_frame_data = grid_frame_data[seq]  # MNP x MNP x (GS**2) tensor
+                # yzn : social tensor 在原始源代码中根本没有启用。
+                social_tensor = self.getSocialTensor(current_grid_frame_data,
+                                                     self.output_states[batch_i])  # MNP x (GS**2 * RNN_size)
+                # NOTE: Using a tensor of zeros as the social tensor
+                # social_tensor = tf.zeros([args.maxNumPeds, args.grid_size * args.grid_size * args.rnn_size])
 
-                with tf.name_scope("extract_input_ped"):
-                    # Extract x and y positions of the current ped
-                    self.spatial_input = tf.slice(current_frame_data, [ped, 1], [1, 2])  # Tensor of shape (1,4)
-                    # Extract the social tensor of the current ped
-                    self.tensor_input = \
-                        tf.slice(social_tensor, [ped, 0], [1, args.grid_size * args.grid_size * args.rnn_size])
-                    # Tensor of shape (1, g*g*r)
+                for ped in range(args.maxNumPeds):
 
-                with tf.name_scope("embeddings_operations"):
-                    # Embed the spatial input
-                    embedded_spatial_input = tf.nn.relu(
-                        tf.nn.xw_plus_b(self.spatial_input, self.embedding_w, self.embedding_b))
-                    # Embed the tensor input
-                    embedded_tensor_input = tf.nn.relu(
-                        tf.nn.xw_plus_b(self.tensor_input, self.embedding_t_w, self.embedding_t_b))
+                    # pedID of the current pedestrian
+                    pedID = current_frame_data[ped, 0]
 
-                with tf.name_scope("concatenate_embeddings"):
-                    # Concatenate the embeddings
-                    complete_input = tf.concat([embedded_spatial_input, embedded_tensor_input], 1)
+                    with tf.name_scope("extract_input_ped"):
+                        # Extract x and y positions of the current ped
+                        self.spatial_input = tf.slice(current_frame_data, [ped, 1], [1, 2])  # Tensor of shape (1,4)
+                        # Extract the social tensor of the current ped
+                        self.tensor_input = \
+                            tf.slice(social_tensor, [ped, 0], [1, args.grid_size * args.grid_size * args.rnn_size])
+                        # Tensor of shape (1, g*g*r)
 
-                # One step of LSTM
-                with tf.variable_scope("LSTM") as scope:
-                    if seq > 0 or ped > 0:
-                        scope.reuse_variables()
-                    self.output_states[ped], temp = \
-                        cell(complete_input, self.initial_states[ped])
-                    self.initial_states[ped] = temp
+                    with tf.name_scope("embeddings_operations"):
+                        # Embed the spatial input
+                        embedded_spatial_input = tf.nn.relu(
+                            tf.nn.xw_plus_b(self.spatial_input, self.embedding_w, self.embedding_b))
+                        # Embed the tensor input
+                        embedded_tensor_input = tf.nn.relu(
+                            tf.nn.xw_plus_b(self.tensor_input, self.embedding_t_w, self.embedding_t_b))
 
-                # with tf.name_scope("reshape_output"):
-                # Store the output hidden state for the current pedestrian
-                #    self.output_states[ped] = tf.reshape(tf.concat(1, output), [-1, args.rnn_size])
-                #    print self.output_states[ped]
+                    with tf.name_scope("concatenate_embeddings"):
+                        # Concatenate the embeddings
+                        complete_input = tf.concat([embedded_spatial_input, embedded_tensor_input], 1)
 
-                # Apply the linear layer. Output would be a tensor of shape 1 x output_size
-                with tf.name_scope("output_linear_layer"):
-                    self.initial_output[ped] = tf.nn.xw_plus_b(self.output_states[ped], self.output_w, self.output_b)
+                    # One step of LSTM
+                    with tf.variable_scope("LSTM") as scope:
+                        if batch_i > 0 or seq > 0 or ped > 0:
+                            scope.reuse_variables()
+                        self.output_states[batch_i, ped], temp = \
+                            cell(complete_input, self.initial_states[batch_i, ped])
+                        self.initial_states[batch_i, ped] = temp
 
-                # with tf.name_scope("store_distribution_parameters"):
-                #    # Store the distribution parameters for the current ped
-                #    self.initial_output[ped] = output
+                    # with tf.name_scope("reshape_output"):
+                    # Store the output hidden state for the current pedestrian
+                    #    self.output_states[ped] = tf.reshape(tf.concat(1, output), [-1, args.rnn_size])
+                    #    print self.output_states[ped]
 
-                with tf.name_scope("extract_target_ped"):
-                    # Extract x and y coordinates of the target data
-                    # x_data and y_data would be tensors of shape 1 x 1
-                    # [x_data, y_data] = tf.split(1, 2, tf.slice(frame_target_data[seq], [ped, 1], [1, 2]))
-                    [x_data, y_data] = tf.split(tf.slice(frame_target_data[seq], [ped, 1], [1, 2]), 2, 1)
+                    # Apply the linear layer. Output would be a tensor of shape 1 x output_size
+                    with tf.name_scope("output_linear_layer"):
+                        self.initial_output[batch_i, ped] = tf.nn.xw_plus_b(self.output_states[batch_i, ped],
+                                                                            self.output_w,
+                                                                            self.output_b)
 
-                with tf.name_scope("get_coef"):
-                    # Extract coef from output of the linear output layer
-                    [o_mux, o_muy, o_sx, o_sy, o_corr] = self.get_coef(self.initial_output[ped])
+                    # with tf.name_scope("store_distribution_parameters"):
+                    #    # Store the distribution parameters for the current ped
+                    #    self.initial_output[ped] = output
 
-                with tf.name_scope("calculate_loss"):
-                    # Calculate loss for the current ped
-                    lossfunc = self.get_lossfunc(o_mux, o_muy, o_sx, o_sy, o_corr, x_data, y_data)
+                    with tf.name_scope("extract_target_ped"):
+                        # Extract x and y coordinates of the target data
+                        # x_data and y_data would be tensors of shape 1 x 1
+                        # [x_data, y_data] = tf.split(1, 2, tf.slice(frame_target_data[seq], [ped, 1], [1, 2]))
+                        [x_data, y_data] = tf.split(tf.slice(frame_target_data[seq], [ped, 1], [1, 2]), 2, 1)
 
-                with tf.name_scope("increment_cost"):
-                    # If it is a non-existent ped, it should not contribute to cost
-                    self.cost = tf.where(tf.equal(pedID, nonexistent_ped), self.cost, tf.add(self.cost, lossfunc))
-                    self.counter = tf.where(tf.not_equal(pedID, nonexistent_ped), tf.add(self.counter, self.increment),
-                                            self.counter)
+                    with tf.name_scope("get_coef"):
+                        # Extract coef from output of the linear output layer
+                        [o_mux, o_muy, o_sx, o_sy, o_corr] = self.get_coef(self.initial_output[batch_i, ped])
+
+                    with tf.name_scope("calculate_loss"):
+                        # Calculate loss for the current ped
+                        lossfunc = self.get_lossfunc(o_mux, o_muy, o_sx, o_sy, o_corr, x_data, y_data)
+
+                    with tf.name_scope("increment_cost"):
+                        # If it is a non-existent ped, it should not contribute to cost
+                        self.cost = tf.where(tf.equal(pedID, nonexistent_ped), self.cost, tf.add(self.cost, lossfunc))
+                        self.counter = tf.where(tf.not_equal(pedID, nonexistent_ped),
+                                                tf.add(self.counter, self.increment),
+                                                self.counter)
 
         with tf.name_scope("mean_cost"):
             # Mean of the cost
@@ -203,7 +227,8 @@ class SocialModel:
         tvars = tf.trainable_variables()
 
         # Get the final LSTM states
-        self.final_states = tf.concat(self.initial_states, 0)
+        # self.final_states = tf.concat(self.initial_states, 0)
+        self.final_states = self.initial_states
 
         # Get the final distribution parameters
         self.final_output = self.initial_output
@@ -215,7 +240,7 @@ class SocialModel:
         grads, _ = tf.clip_by_global_norm(self.gradients, args.grad_clip)
 
         # Define the optimizer
-        optimizer = tf.train.AdamOptimizer(self.lr)
+        optimizer = tf.train.RMSPropOptimizer(self.lr)
 
         # The train operator
         self.train_op = optimizer.apply_gradients(zip(grads, tvars))

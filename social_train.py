@@ -3,6 +3,7 @@ import argparse
 import os
 import time
 import pickle
+import numpy as np
 
 from social_model import SocialModel
 from grid import getSequenceGridMask
@@ -100,7 +101,6 @@ def train(args, recorder):
                                    mode='train',
                                    train_leave=args.train_leave,
                                    recorder=recorder)
-    batch = data_loader.next_batch()
 
     savepath = args.save_dir
     # save path check 当保存目录已经存在时需要特别处理，以防止保存的模型出现覆盖
@@ -166,25 +166,52 @@ def train(args, recorder):
                 counter_batch = 0
                 full_counter_batch = 0
 
+                # Real Batch Training
+                def batch_train_step(input_data, target_data):
+                    if args.relative_path:
+                        raise Exception('No support for relative path now.')
+
+                    grid_data = list()
+                    for index in range(data_loader.batch_size):
+                        grid_data.append(getSequenceGridMask(data_loader.norm_to_raw(input_data[index]),
+                                                             args.neighboorhood_size,
+                                                             args.grid_size))
+                    grid_data = np.stack(grid_data, axis=0)
+
+                    feed = {model.input_data: input_data,
+                            model.target_data: target_data,
+                            model.grid_data: grid_data}
+
+                    _train_loss, _, _counter = sess.run([model.cost, model.train_op, model.counter], feed)
+
+                    return _train_loss, _counter
+
+                train_loss, counter = batch_train_step(x, y)
+                loss_batch += train_loss
+                counter_batch += counter
+
                 # For each sequence in the batch
                 for batch in range(data_loader.batch_size):
                     # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
                     x_batch, y_batch = x[batch], y[batch]
 
-                    raw_x_batch = data_loader.norm_to_raw(x_batch)
-                    grid_batch = getSequenceGridMask(raw_x_batch, args.neighborhood_size, args.grid_size)
-
-                    if args.relative_path:
-                        raise Exception('No support for relative path now.')
-                    else:
-                        input_data = x_batch
-                        target_data = y_batch
-
-                    feed = {model.input_data: input_data,
-                            model.target_data: target_data,
-                            model.grid_data: grid_batch}
-
-                    train_loss, _, counter = sess.run([model.cost, model.train_op, model.counter], feed)
+                    # Abandoned For Real Batch Training.
+                    # raw_x_batch = data_loader.norm_to_raw(x_batch)
+                    # grid_batch = getSequenceGridMask(raw_x_batch, args.neighborhood_size, args.grid_size)
+                    #
+                    # if args.relative_path:
+                    #     raise Exception('No support for relative path now.')
+                    # else:
+                    #     input_data = x_batch
+                    #     target_data = y_batch
+                    #
+                    # feed = {model.input_data: input_data,
+                    #         model.target_data: target_data,
+                    #         model.grid_data: grid_batch}
+                    #
+                    # train_loss, _, counter = sess.run([model.cost, model.train_op, model.counter], feed)
+                    # loss_batch += train_loss
+                    # counter_batch += counter
 
                     def get_full_counter(data):
                         # Get maximum edge of counter by the number of valid vrus.
@@ -194,10 +221,8 @@ def train(args, recorder):
                                 full_counter += data.shape[1]
                         return full_counter
 
-                    loss_batch += train_loss
-                    counter_batch += counter
-                    full_counter_batch += get_full_counter(input_data)
-                    assert counter <= get_full_counter(input_data)
+                    full_counter_batch += get_full_counter(x_batch)
+                    # assert counter <= get_full_counter(input_data)
 
                 end = time.time()
                 loss_batch = loss_batch / data_loader.batch_size
