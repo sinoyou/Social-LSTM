@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, or lstm')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=3,
                         help='minibatch size')
     # Length of sequence to be considered parameter
     parser.add_argument('--seq_length', type=int, default=12,
@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=101,
                         help='number of epochs')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=50,
+    parser.add_argument('--save_every', type=int, default=10,
                         help='save frequency')
     # TODO: (resolve) Clipping gradients for now. No idea whether we should
     # Gradient value at which it should be clipped
@@ -174,7 +174,7 @@ def train(args, recorder):
                     grid_data = list()
                     for index in range(data_loader.batch_size):
                         grid_data.append(getSequenceGridMask(data_loader.norm_to_raw(input_data[index]),
-                                                             args.neighboorhood_size,
+                                                             args.neighborhood_size,
                                                              args.grid_size))
                     grid_data = np.stack(grid_data, axis=0)
 
@@ -217,7 +217,7 @@ def train(args, recorder):
                         # Get maximum edge of counter by the number of valid vrus.
                         full_counter = 0
                         for index in range(data.shape[0]):
-                            if data[index, :].sum() > 0:
+                            if data[index, :].sum() != 0:
                                 full_counter += data.shape[1]
                         return full_counter
 

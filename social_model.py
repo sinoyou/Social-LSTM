@@ -73,12 +73,21 @@ class SocialModel:
         # Define embedding and output layers
         self.define_embedding_and_output_layers(args)
 
+        def get_two_dim_arrays(x):
+            result = []
+            one_dim_list = [tf.squeeze(i, 0) for i in tf.split(x, x.shape[0], axis=0)]
+            for j in one_dim_list:
+                # save single dimension [1, output_states]
+                result.append([i for i in tf.split(j, j.shape[0], axis=0)])
+            return result
+
         # Define LSTM states for each pedestrian
         with tf.variable_scope("LSTM_states"):
             self.LSTM_states = tf.zeros([args.batch_size, args.maxNumPeds, cell.state_size], name="LSTM_states")
             # self.initial_states = tf.split(0, args.maxNumPeds, self.LSTM_states)
             # self.initial_states = tf.split(self.LSTM_states, args.maxNumPeds, axis=0) legacy
             self.initial_states = self.LSTM_states
+            self.initial_states = get_two_dim_arrays(self.initial_states)
 
         # Define hidden output states for each pedestrian
         with tf.variable_scope("Hidden_states"):
@@ -87,6 +96,7 @@ class SocialModel:
             # legacy
             # self.output_states = tf.split(tf.zeros([args.maxNumPeds, cell.output_size]), args.maxNumPeds, axis=0)
             self.output_states = tf.zeros([args.batch_size, args.maxNumPeds, cell.output_size])
+            self.output_states = get_two_dim_arrays(self.output_states)
 
         # List of tensors each of shape args.maxNumPedsx3 corresponding to each frame in the sequence
         with tf.name_scope("frame_data_tensors"):
@@ -126,6 +136,7 @@ class SocialModel:
             # legacy
             # self.initial_output = tf.split(tf.zeros([args.maxNumPeds, self.output_size]), args.maxNumPeds, 0)
             self.initial_output = tf.zeros([args.batch_size, args.maxNumPeds, self.output_size])
+            self.initial_output = get_two_dim_arrays(self.initial_output)
 
         # Tensor to represent non-existent ped
         with tf.name_scope("Non_existent_ped_stuff"):
@@ -134,9 +145,10 @@ class SocialModel:
         for batch_i in range(self.args.batch_size):
 
             # prepare unit in a batch
-            frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_data[batch_i], axis=0)]
-            frame_target_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_target_data, axis=0)]
-            grid_frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_grid_frame_data[batch_i], axis=0)]
+            seq_len = batch_frame_data[0].shape[0]
+            frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_data[batch_i], seq_len, axis=0)]
+            frame_target_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_frame_target_data[batch_i], seq_len, axis=0)]
+            grid_frame_data = [tf.squeeze(i, axis=0) for i in tf.split(batch_grid_frame_data[batch_i], seq_len, axis=0)]
 
             # Iterate over each frame in the sequence
             for seq, frame in enumerate(frame_data):
@@ -178,9 +190,9 @@ class SocialModel:
                     with tf.variable_scope("LSTM") as scope:
                         if batch_i > 0 or seq > 0 or ped > 0:
                             scope.reuse_variables()
-                        self.output_states[batch_i, ped], temp = \
-                            cell(complete_input, self.initial_states[batch_i, ped])
-                        self.initial_states[batch_i, ped] = temp
+                        self.output_states[batch_i][ped], temp = \
+                            cell(complete_input, self.initial_states[batch_i][ped])
+                        self.initial_states[batch_i][ped] = temp
 
                     # with tf.name_scope("reshape_output"):
                     # Store the output hidden state for the current pedestrian
@@ -189,7 +201,7 @@ class SocialModel:
 
                     # Apply the linear layer. Output would be a tensor of shape 1 x output_size
                     with tf.name_scope("output_linear_layer"):
-                        self.initial_output[batch_i, ped] = tf.nn.xw_plus_b(self.output_states[batch_i, ped],
+                        self.initial_output[batch_i][ped] = tf.nn.xw_plus_b(self.output_states[batch_i][ped],
                                                                             self.output_w,
                                                                             self.output_b)
 
@@ -205,7 +217,7 @@ class SocialModel:
 
                     with tf.name_scope("get_coef"):
                         # Extract coef from output of the linear output layer
-                        [o_mux, o_muy, o_sx, o_sy, o_corr] = self.get_coef(self.initial_output[batch_i, ped])
+                        [o_mux, o_muy, o_sx, o_sy, o_corr] = self.get_coef(self.initial_output[batch_i][ped])
 
                     with tf.name_scope("calculate_loss"):
                         # Calculate loss for the current ped
